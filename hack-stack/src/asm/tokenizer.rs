@@ -1,6 +1,5 @@
 use super::tokens::{Kind, Token};
-use crate::common::{Cursor, Span};
-use std::{iter::Peekable, str::Chars};
+use crate::common::Cursor;
 
 pub const EOF_CHAR: char = '\0';
 
@@ -22,22 +21,34 @@ impl<'a> Tokenizer<'a> {
 
         let token = match self.cursor.c {
             '\n' | '@' | '=' | '+' | '-' | '&' | '|' | '!' | ';' | '(' | ')' => {
-                Token::from_char(self.cursor.pos, self.cursor.c)
+                let token = Token::from_char(self.cursor.pos, self.cursor.c);
+                self.cursor.advance();
+                token
             }
-            '/' => match self.cursor.peek() {
-                '/' => self.tokenize_comment(),
-                c => {
-                    self.cursor.advance();
-                    Token::invalid(c, self.cursor.pos)
-                }
-            },
+            '/' => {
+                let token = match self.cursor.peek() {
+                    '/' => self.tokenize_comment(),
+                    _ => {
+                        let token = Token::invalid(self.cursor.c, self.cursor.pos);
+                        self.cursor.advance();
+                        token
+                    }
+                };
+                token
+            }
             c if ident_start_char(c) => self.tokenize_identifier(),
             '0'..='9' => self.tokenize_number(),
-            EOF_CHAR => Token::eof(self.cursor.pos + 1),
-            c => Token::invalid(c, self.cursor.pos),
+            EOF_CHAR => {
+                let token = Token::eof(self.cursor.pos);
+                self.cursor.advance();
+                token
+            }
+            c => {
+                let token = Token::invalid(c, self.cursor.pos);
+                self.cursor.advance();
+                token
+            }
         };
-
-        self.cursor.advance();
 
         token
     }
@@ -105,6 +116,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::Span;
 
     fn tokenize(s: &str) -> Vec<Token> {
         Tokenizer::new(s).collect()
@@ -112,7 +124,14 @@ mod tests {
 
     #[test]
     fn test_empty_string() {
-        assert_eq!(tokenize(""), vec![]);
+        let mut t = Tokenizer::new("");
+        assert_eq!(
+            t.next_token(),
+            Token {
+                kind: Kind::EOF,
+                span: Span::new(0, 0)
+            }
+        );
     }
 
     #[test]
@@ -213,7 +232,11 @@ mod tests {
             tokens,
             vec![
                 Token {
-                    kind: Kind::Invalid('!'),
+                    kind: Kind::Invalid('/'),
+                    span: Span::new(1, 2)
+                },
+                Token {
+                    kind: Kind::Not,
                     span: Span::new(2, 3)
                 },
                 Token {

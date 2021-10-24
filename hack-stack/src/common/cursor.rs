@@ -28,7 +28,10 @@ impl<'a> Cursor<'a> {
                 self.c = c;
             }
             None => {
-                self.c = EOF_CHAR;
+                if self.c != EOF_CHAR {
+                    self.pos += self.c.len_utf8();
+                    self.c = EOF_CHAR;
+                }
             }
         }
         self.c
@@ -40,17 +43,11 @@ impl<'a> Cursor<'a> {
 
     pub fn eat_while(&mut self, cond: fn(char) -> bool) -> Span {
         let start = self.pos;
-        let mut length = if cond(self.c) {
-            self.c.len_utf8()
-        } else {
-            return Span::new(start, start);
-        };
+        let mut length = 0;
 
-        while cond(self.peek()) {
-            length += match self.advance() {
-                EOF_CHAR => 0,
-                c => c.len_utf8(),
-            }
+        while cond(self.c) {
+            length += self.c.len_utf8();
+            self.advance();
         }
         Span::new(start, start + length)
     }
@@ -62,6 +59,25 @@ mod tests {
 
     #[test]
     fn test_cursor() {
-        todo!();
+        let src = "soñar";
+        let mut cursor = Cursor::new(src);
+        assert_eq!(cursor.c, 's');
+        assert_eq!(cursor.pos, 0);
+
+        assert_eq!(cursor.advance(), 'o');
+        assert_eq!(cursor.advance(), 'ñ');
+        assert_eq!(cursor.c, 'ñ');
+        assert_eq!(cursor.pos, 2);
+
+        assert_eq!(cursor.advance(), 'a');
+        assert_eq!(cursor.c, 'a');
+        assert_eq!(cursor.pos, 4);
+
+        assert_eq!(cursor.advance(), 'r');
+        assert_eq!(cursor.pos, 5);
+
+        assert_eq!(cursor.advance(), EOF_CHAR);
+        assert_eq!(cursor.c, EOF_CHAR);
+        assert_eq!(cursor.pos, 6);
     }
 }
