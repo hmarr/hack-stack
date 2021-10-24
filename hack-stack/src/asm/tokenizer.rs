@@ -1,9 +1,6 @@
-mod span;
-mod token;
-
-pub use span::Span;
+use super::tokens::{Kind, Token};
+use crate::common::Span;
 use std::{iter::Peekable, str::Chars};
-pub use token::{Kind, Token};
 
 pub const EOF_CHAR: char = '\0';
 

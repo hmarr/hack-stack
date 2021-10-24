@@ -1,7 +1,11 @@
 [package]
-name = "hack-as"
+name = "hack-stack"
 version = "0.1.0"
 edition = "2018"
+
+[[bin]]
+name = "hack-assemble"
+path = "src/bin/hack_assemble.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

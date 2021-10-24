@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use crate::{errors::SpanError, parse::ast};
+use super::ast;
+use crate::common::SpanError;
 
 pub struct Codegen<'a> {
     symbol_table: HashMap<&'a str, u16>,
@@ -173,7 +174,7 @@ impl<'a> Codegen<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse::Parser, tokenize::Tokenizer};
+    use crate::asm::{parser::Parser, tokenizer::Tokenizer};
 
     use super::*;
 

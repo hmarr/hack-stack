@@ -1,9 +1,9 @@
 use std::convert::TryFrom;
 
-use crate::errors::SpanError;
-use crate::tokenize::{Kind, Span, Token, Tokenizer};
-
-pub mod ast;
+use super::ast;
+use super::tokenizer::Tokenizer;
+use super::tokens::{Kind, Token};
+use crate::common::{Span, SpanError};
 
 type ParseResult<T> = Result<T, SpanError>;
 
@@ -352,7 +352,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::tokenize::Span;
+    use crate::common::Span;
 
     use super::*;
 

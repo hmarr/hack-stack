@@ -1,6 +1,6 @@
 use std::fmt::{self, Write};
 
-use super::span::Span;
+use crate::common::Span;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Kind<'a> {

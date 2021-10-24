@@ -1,4 +1,4 @@
-use crate::tokenize::Span;
+use super::Span;
 
 #[derive(Debug, PartialEq)]
 pub struct SpanError {

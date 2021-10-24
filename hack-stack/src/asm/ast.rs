@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::tokenize::Span;
+use crate::common::Span;
 
 #[derive(Debug, PartialEq)]
 pub struct Label<'a> {
