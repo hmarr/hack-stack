@@ -5,7 +5,7 @@ use std::{
 };
 
 use hack_stack::asm;
-use hack_stack::common::SpanError;
+use hack_stack::common;
 
 fn main() {
     if let Err(_) = assemble_main() {
@@ -23,12 +23,13 @@ fn assemble_main() -> Result<(), ()> {
         eprintln!("reading {}: {}", source_path, err);
     })?;
 
+    let source_file = common::SourceFile::new(&source);
     let tokenizer = asm::Tokenizer::new(&source);
     let mut parser = asm::Parser::new(tokenizer);
     let instructions = match parser.parse() {
         Ok(instructions) => instructions,
         Err(errs) => {
-            display_span_errors(&parser, errs);
+            display_span_errors(&source_file, errs);
             return Err(());
         }
     };
@@ -37,7 +38,7 @@ fn assemble_main() -> Result<(), ()> {
     let machine_code = match gen.generate(&instructions) {
         Ok(output) => output,
         Err(errs) => {
-            display_span_errors(&parser, errs);
+            display_span_errors(&source_file, errs);
             return Err(());
         }
     };
@@ -58,9 +59,9 @@ fn assemble_main() -> Result<(), ()> {
     Ok(())
 }
 
-fn display_span_errors(parser: &asm::Parser, errs: Vec<SpanError>) {
+fn display_span_errors(source_file: &common::SourceFile, errs: Vec<common::SpanError>) {
     for err in errs {
-        let (line, col) = parser.error_loc(&err);
+        let (line, col) = source_file.loc_for_byte_pos(err.span.start);
         eprintln!("line {}, char {}: {}", line, col, err.msg);
     }
     std::process::exit(1);

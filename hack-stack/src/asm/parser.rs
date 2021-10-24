@@ -50,10 +50,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn error_loc(&self, err: &SpanError) -> (usize, usize) {
-        self.tokenizer.loc_for_byte_pos(err.span.start)
-    }
-
     fn parse_instruction(&mut self) -> ParseResult<Option<ast::Instruction<'a>>> {
         while matches!(self.token.kind, Kind::EOL | Kind::Comment(_)) {
             self.advance();

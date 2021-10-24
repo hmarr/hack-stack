@@ -1,99 +1,49 @@
 use super::tokens::{Kind, Token};
-use crate::common::Span;
+use crate::common::{Cursor, Span};
 use std::{iter::Peekable, str::Chars};
 
 pub const EOF_CHAR: char = '\0';
 
 pub struct Tokenizer<'a> {
     src: &'a str,
-    src_iter: Peekable<Chars<'a>>,
-    pos: usize,
-    c: char,
-    lines: Vec<usize>,
+    cursor: Cursor<'a>,
 }
 
 impl<'a> Tokenizer<'a> {
     pub fn new(src: &'a str) -> Tokenizer<'a> {
-        let mut iter = src.chars().peekable();
-        let c = iter.next().unwrap_or(EOF_CHAR);
         Tokenizer {
             src,
-            src_iter: iter,
-            pos: 0,
-            c,
-            lines: vec![],
+            cursor: Cursor::new(src),
         }
     }
 
     pub fn next_token(&mut self) -> Token<'a> {
         self.eat_whitespace();
 
-        let token = match self.c {
+        let token = match self.cursor.c {
             '\n' | '@' | '=' | '+' | '-' | '&' | '|' | '!' | ';' | '(' | ')' => {
-                Token::from_char(self.pos, self.c)
+                Token::from_char(self.cursor.pos, self.cursor.c)
             }
-            '/' => match self.peek() {
+            '/' => match self.cursor.peek() {
                 '/' => self.tokenize_comment(),
                 c => {
-                    self.advance();
-                    Token::invalid(c, self.pos)
+                    self.cursor.advance();
+                    Token::invalid(c, self.cursor.pos)
                 }
             },
             c if ident_start_char(c) => self.tokenize_identifier(),
             '0'..='9' => self.tokenize_number(),
-            EOF_CHAR => Token::eof(self.pos + 1),
-            c => Token::invalid(c, self.pos),
+            EOF_CHAR => Token::eof(self.cursor.pos + 1),
+            c => Token::invalid(c, self.cursor.pos),
         };
 
-        self.advance();
+        self.cursor.advance();
 
         token
     }
 
-    pub fn loc_for_byte_pos(&self, pos: usize) -> (usize, usize) {
-        let mut line_start = 0;
-        for (line, &next_newline) in self.lines.iter().enumerate() {
-            if next_newline >= pos {
-                let char_pos = self.src[line_start..pos].chars().count() + 1;
-                return (line + 1, char_pos);
-            }
-            line_start = next_newline + 1;
-        }
-
-        let char_pos = self.src[line_start..pos].chars().count() + 1;
-        (self.lines.len() + 1, char_pos)
-    }
-
-    fn advance(&mut self) -> char {
-        match self.src_iter.next() {
-            Some(c) => {
-                if self.c == '\n' {
-                    self.lines.push(self.pos);
-                }
-                self.pos += self.c.len_utf8();
-                self.c = c;
-            }
-            None => {
-                self.c = EOF_CHAR;
-            }
-        }
-        self.c
-    }
-
-    fn peek(&mut self) -> char {
-        *self.src_iter.peek().unwrap_or(&EOF_CHAR)
-    }
-
     fn tokenize_number(&mut self) -> Token<'a> {
-        let start = self.pos;
-        let mut length = self.c.len_utf8();
-
-        while self.peek().is_numeric() {
-            self.advance();
-            length += self.c.len_utf8();
-        }
-
-        let span = Span::new(start, start + length);
+        let span = self.cursor.eat_while(|c| c.is_numeric());
         Token {
             kind: Kind::Number(&self.src[span.start..span.end]),
             span,
@@ -101,15 +51,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn tokenize_identifier(&mut self) -> Token<'a> {
-        let start = self.pos;
-        let mut length = self.c.len_utf8();
-
-        while ident_char(self.peek()) {
-            self.advance();
-            length += self.c.len_utf8();
-        }
-
-        let span = Span::new(start, start + length);
+        let span = self.cursor.eat_while(ident_char);
         Token {
             kind: Kind::Identifier(&self.src[span.start..span.end]),
             span,
@@ -117,15 +59,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn tokenize_comment(&mut self) -> Token<'a> {
-        let start = self.pos;
-        let mut length = self.c.len_utf8();
-
-        while self.peek() != '\n' && self.peek() != EOF_CHAR {
-            self.advance();
-            length += self.c.len_utf8();
-        }
-
-        let span = Span::new(start, start + length);
+        let span = self.cursor.eat_while(|c| c != '\n' && c != EOF_CHAR);
         Token {
             kind: Kind::Comment(&self.src[span.start..span.end]),
             span,
@@ -133,8 +67,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn eat_whitespace(&mut self) {
-        while self.c.is_whitespace() && self.c != '\n' {
-            self.advance();
+        while self.cursor.c.is_whitespace() && self.cursor.c != '\n' {
+            self.cursor.advance();
         }
     }
 }
@@ -146,6 +80,7 @@ fn ident_char(c: char) -> bool {
         _ => false,
     }
 }
+
 fn ident_start_char(c: char) -> bool {
     match c {
         c if c.is_alphabetic() => true,
@@ -287,17 +222,5 @@ mod tests {
                 }
             ]
         );
-    }
-
-    #[test]
-    fn test_loc_for_byte_pos() {
-        let mut t = Tokenizer::new("á\néf\n\ng");
-        while t.next_token().kind != Kind::EOF {}
-
-        assert_eq!(t.loc_for_byte_pos(0), (1, 1)); // á
-        assert_eq!(t.loc_for_byte_pos(2), (1, 2)); // \n
-        assert_eq!(t.loc_for_byte_pos(3), (2, 1)); // é
-        assert_eq!(t.loc_for_byte_pos(5), (2, 2)); // f
-        assert_eq!(t.loc_for_byte_pos(8), (4, 1)); // g
     }
 }
