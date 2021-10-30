@@ -1,0 +1,50 @@
+use std::{fs, io::stdin};
+
+use hack_stack::emulator;
+
+fn main() {
+    if let Err(_) = emulate_main() {
+        std::process::exit(1);
+    }
+}
+
+fn emulate_main() -> Result<(), ()> {
+    let args = std::env::args().collect::<Vec<String>>();
+    let source_path = args.get(1).ok_or_else(|| {
+        eprintln!("usage: hack-emulate FILE");
+    })?;
+
+    let source = fs::read_to_string(source_path).map_err(|err| {
+        eprintln!("reading {}: {}", source_path, err);
+    })?;
+
+    let mut rom = Vec::<u16>::with_capacity(0x2000);
+    for line in source.lines() {
+        rom.push(u16::from_str_radix(line.trim_end(), 2).unwrap());
+    }
+
+    let mut emulator = emulator::Emulator::new(rom);
+    println!("|     D |     A |    PC | Memory");
+    for _ in 0..20000000 {
+        let memory = emulator.memory()[0..15]
+            .iter()
+            .map(|x: &u16| format!("{:04X}", x))
+            .collect::<Vec<String>>()
+            .join(" ");
+        println!(
+            "| {:5} | {:5} | {:5} | {} |",
+            emulator.cpu.d, emulator.cpu.a, emulator.cpu.pc, memory
+        );
+
+        emulator.step().map_err(|err| {
+            eprintln!("emulator error: {}", err);
+        })?;
+
+        let mut buf = String::new();
+        if stdin().read_line(&mut buf).expect("reading line") == 0 {
+            break;
+        }
+    }
+
+    Ok(())
+}
