@@ -1,10 +1,13 @@
+use super::Span;
+
 pub struct SourceFile<'a> {
+    pub name: &'a str,
     src: &'a str,
     lines: Vec<usize>,
 }
 
 impl<'a> SourceFile<'a> {
-    pub fn new(src: &'a str) -> Self {
+    pub fn new(src: &'a str, name: &'a str) -> Self {
         let mut lines = vec![];
         for (pos, c) in src.char_indices() {
             if c == '\n' {
@@ -12,7 +15,7 @@ impl<'a> SourceFile<'a> {
             }
         }
 
-        SourceFile { src, lines }
+        SourceFile { src, name, lines }
     }
 
     pub fn loc_for_byte_pos(&self, pos: usize) -> (usize, usize) {
@@ -28,6 +31,10 @@ impl<'a> SourceFile<'a> {
         let char_pos = self.src[line_start..pos].chars().count() + 1;
         (self.lines.len() + 1, char_pos)
     }
+
+    pub fn str_for_span(&self, span: Span) -> &str {
+        &self.src[span.start..span.end]
+    }
 }
 
 #[cfg(test)]
@@ -36,7 +43,7 @@ mod tests {
 
     #[test]
     fn test_loc_for_byte_pos() {
-        let t = SourceFile::new("á\néf\n\ng");
+        let t = SourceFile::new("á\néf\n\ng", "Test.foo");
 
         assert_eq!(t.loc_for_byte_pos(0), (1, 1)); // á
         assert_eq!(t.loc_for_byte_pos(2), (1, 2)); // \n

@@ -27,7 +27,7 @@ impl Emulator {
         self.load_memory(addr as usize);
         self.cpu.execute(instruction)?;
         if self.cpu.write_m {
-            self.set_memory(addr)?;
+            self.set_memory(addr, self.cpu.m)?;
         }
 
         Ok(())
@@ -36,6 +36,14 @@ impl Emulator {
     pub fn load_rom(&mut self, rom: Vec<u16>) {
         self.rom = rom;
         self.cpu.reset();
+        self.memory.fill(0);
+    }
+
+    pub fn set_memory(&mut self, addr: u16, val: u16) -> Result<(), String> {
+        match addr {
+            0..=0x6000 => Ok(self.memory[addr as usize] = val),
+            _ => Err(format!("Out of bounds memory access ({:#x})", addr))?,
+        }
     }
 
     pub fn set_keyboard(&mut self, value: u16) {
@@ -52,13 +60,6 @@ impl Emulator {
     fn load_memory(&mut self, addr: usize) {
         if let Some(&m) = self.memory.get(addr) {
             self.cpu.m = m;
-        }
-    }
-
-    fn set_memory(&mut self, addr: u16) -> Result<(), String> {
-        match addr {
-            0..=0x6000 => Ok(self.memory[addr as usize] = self.cpu.m),
-            _ => Err(format!("Out of bounds memory access ({:#x})", addr))?,
         }
     }
 }

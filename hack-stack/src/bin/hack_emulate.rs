@@ -9,10 +9,17 @@ fn main() {
 }
 
 fn emulate_main() -> Result<(), ()> {
-    let args = std::env::args().collect::<Vec<String>>();
-    let source_path = args.get(1).ok_or_else(|| {
+    let args_and_opts = std::env::args().collect::<Vec<String>>();
+    let (opts, args): (Vec<&String>, Vec<&String>) = args_and_opts
+        .iter()
+        .skip(1)
+        .partition(|&a| a.starts_with("--"));
+
+    let source_path = args.get(0).ok_or_else(|| {
         eprintln!("usage: hack-emulate FILE");
     })?;
+
+    let trace = opts.iter().any(|o| *o == "--trace");
 
     let source = fs::read_to_string(source_path).map_err(|err| {
         eprintln!("reading {}: {}", source_path, err);
@@ -24,17 +31,21 @@ fn emulate_main() -> Result<(), ()> {
     }
 
     let mut emulator = emulator::Emulator::new(rom);
-    println!("|     D |     A |    PC | Memory");
+    if trace {
+        println!("|     D |     A |    PC | Memory");
+    }
     for _ in 0..20000000 {
-        let memory = emulator.memory()[0..15]
-            .iter()
-            .map(|x: &u16| format!("{:04X}", x))
-            .collect::<Vec<String>>()
-            .join(" ");
-        println!(
-            "| {:5} | {:5} | {:5} | {} |",
-            emulator.cpu.d, emulator.cpu.a, emulator.cpu.pc, memory
-        );
+        if trace {
+            let memory = emulator.memory()[0..16]
+                .iter()
+                .map(|x: &u16| format!("{:04X}", x))
+                .collect::<Vec<String>>()
+                .join(" ");
+            println!(
+                "| {:5} | {:5} | {:5} | {} |",
+                emulator.cpu.d, emulator.cpu.a, emulator.cpu.pc, memory
+            );
+        }
 
         emulator.step().map_err(|err| {
             eprintln!("emulator error: {}", err);

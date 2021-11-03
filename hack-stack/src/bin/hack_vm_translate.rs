@@ -4,28 +4,29 @@ use std::{
     path::Path,
 };
 
-use hack_stack::asm;
 use hack_stack::common;
+use hack_stack::vm;
 
 fn main() {
-    if let Err(_) = assemble_main() {
+    if let Err(_) = translate_main() {
         std::process::exit(1);
     }
 }
 
-fn assemble_main() -> Result<(), ()> {
+fn translate_main() -> Result<(), ()> {
     let args = std::env::args().collect::<Vec<String>>();
     let source_path = args.get(1).ok_or_else(|| {
-        eprintln!("usage: hack-assemble FILE");
+        eprintln!("usage: hack-vm-translate FILE");
     })?;
 
     let source = fs::read_to_string(source_path).map_err(|err| {
         eprintln!("reading {}: {}", source_path, err);
     })?;
 
-    let source_file = common::SourceFile::new(&source, source_path);
-    let tokenizer = asm::Tokenizer::new(&source);
-    let mut parser = asm::Parser::new(tokenizer);
+    let source_file_name = source_path.split('/').last().unwrap();
+    let source_file = common::SourceFile::new(&source, source_file_name);
+    let tokenizer = vm::Tokenizer::new(&source);
+    let mut parser = vm::Parser::new(tokenizer);
     let instructions = match parser.parse() {
         Ok(instructions) => instructions,
         Err(errs) => {
@@ -34,7 +35,7 @@ fn assemble_main() -> Result<(), ()> {
         }
     };
 
-    let mut gen = asm::Codegen::new();
+    let mut gen = vm::Codegen::new(&source_file);
     let machine_code = match gen.generate(&instructions) {
         Ok(output) => output,
         Err(errs) => {
@@ -43,7 +44,7 @@ fn assemble_main() -> Result<(), ()> {
         }
     };
 
-    let output_path = source_path.replace(".asm", "") + ".hack";
+    let output_path = source_path.replace(".vm", "") + ".asm";
     let mut out_file = File::create(Path::new(&output_path)).map_err(|err| {
         eprintln!("creating {}: {}", output_path, err);
     })?;
@@ -52,7 +53,7 @@ fn assemble_main() -> Result<(), ()> {
     })?;
 
     println!(
-        "Assembled {} successfully, wrote to {}",
+        "Translated {} successfully, wrote to {}",
         source_path, output_path
     );
 

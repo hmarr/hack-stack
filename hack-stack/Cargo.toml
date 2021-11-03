@@ -8,6 +8,10 @@ name = "hack-assemble"
 path = "src/bin/hack_assemble.rs"
 
 [[bin]]
+name = "hack-vm-translate"
+path = "src/bin/hack_vm_translate.rs"
+
+[[bin]]
 name = "hack-emulate"
 path = "src/bin/hack_emulate.rs"
 

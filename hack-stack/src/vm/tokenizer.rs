@@ -1,5 +1,5 @@
 use super::tokens::{Kind, Token};
-use crate::common::{Cursor, EOF_CHAR};
+use crate::common::{Cursor, Span, EOF_CHAR};
 
 pub struct Tokenizer<'a> {
     src: &'a str,
@@ -17,34 +17,40 @@ impl<'a> Tokenizer<'a> {
     pub fn next_token(&mut self) -> Token<'a> {
         self.eat_whitespace();
 
+        let start_pos = self.cursor.pos;
         let token = match self.cursor.c {
-            '\n' | '@' | '=' | '+' | '-' | '&' | '|' | '!' | ';' | '(' | ')' => {
-                let token = Token::from_char(self.cursor.pos, self.cursor.c);
+            '\n' => {
                 self.cursor.advance();
-                token
+                Token {
+                    kind: Kind::EOL,
+                    span: Span::new(start_pos, start_pos + 1),
+                }
             }
             '/' => {
                 let token = match self.cursor.peek() {
                     '/' => self.tokenize_comment(),
                     _ => {
-                        let token = Token::invalid(self.cursor.c, self.cursor.pos);
                         self.cursor.advance();
-                        token
+                        Token {
+                            kind: Kind::Invalid(&self.src[start_pos..start_pos + 1]),
+                            span: Span::new(start_pos, start_pos + 1),
+                        }
                     }
                 };
                 token
             }
-            c if ident_start_char(c) => self.tokenize_identifier(),
             '0'..='9' => self.tokenize_number(),
+            c if c.is_lowercase() => self.tokenize_identifier(),
             EOF_CHAR => {
-                let token = Token::eof(self.cursor.pos);
                 self.cursor.advance();
-                token
+                Token::eof(start_pos)
             }
-            c => {
-                let token = Token::invalid(c, self.cursor.pos);
+            _ => {
                 self.cursor.advance();
-                token
+                Token {
+                    kind: Kind::Invalid(&self.src[start_pos..start_pos + 1]),
+                    span: Span::new(start_pos, start_pos + 1),
+                }
             }
         };
 
@@ -60,11 +66,17 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn tokenize_identifier(&mut self) -> Token<'a> {
-        let span = self.cursor.eat_while(ident_char);
-        Token {
-            kind: Kind::Identifier(&self.src[span.start..span.end]),
-            span,
-        }
+        let span = self.cursor.eat_while(|c| c.is_lowercase());
+        let ident = &self.src[span.start..span.end];
+        let kind =
+            match ident {
+                "push" | "pop" | "add" | "sub" | "neg" | "and" | "or" | "not" | "eq" | "lt"
+                | "gt" => Kind::Instruction(ident),
+                "constant" | "local" | "argument" | "static" | "this" | "that" | "temp"
+                | "pointer" => Kind::Segment(ident),
+                _ => Kind::Invalid(ident),
+            };
+        Token { kind, span }
     }
 
     fn tokenize_comment(&mut self) -> Token<'a> {
@@ -79,22 +91,6 @@ impl<'a> Tokenizer<'a> {
         while self.cursor.c.is_whitespace() && self.cursor.c != '\n' {
             self.cursor.advance();
         }
-    }
-}
-
-fn ident_char(c: char) -> bool {
-    match c {
-        c if c.is_alphanumeric() => true,
-        '_' | '.' | '$' | ':' => true,
-        _ => false,
-    }
-}
-
-fn ident_start_char(c: char) -> bool {
-    match c {
-        c if c.is_alphabetic() => true,
-        '_' | '.' | '$' | ':' => true,
-        _ => false,
     }
 }
 
@@ -135,84 +131,41 @@ mod tests {
     #[test]
     fn test_spans() {
         assert_eq!(
-            tokenize(" @café 1"),
+            tokenize(" push static 1"),
             vec![
                 Token {
-                    kind: Kind::AtSign,
-                    span: Span::new(1, 2)
+                    kind: Kind::Instruction("push"),
+                    span: Span::new(1, 5)
                 },
                 Token {
-                    kind: Kind::Identifier("café"),
-                    span: Span::new(2, 7)
+                    kind: Kind::Segment("static"),
+                    span: Span::new(6, 12)
                 },
                 Token {
                     kind: Kind::Number("1"),
-                    span: Span::new(8, 9)
+                    span: Span::new(13, 14)
                 },
             ]
         );
     }
 
     #[test]
-    fn test_a_instructions() {
-        let tokens = tokenize("@0 @-123\n  @my$var");
+    fn test_instructions() {
+        let tokens = tokenize("push local 1\n pop constant 250 \nadd\nsub");
         assert_eq!(
             tokens.iter().map(|t| t.kind).collect::<Vec<Kind>>(),
             vec![
-                Kind::AtSign,
-                Kind::Number("0"),
-                Kind::AtSign,
-                Kind::Minus,
-                Kind::Number("123"),
-                Kind::EOL,
-                Kind::AtSign,
-                Kind::Identifier("my$var"),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_c_instructions() {
-        let tokens = tokenize("D=-1 M=!A D=M|A 0;JMP");
-        assert_eq!(
-            tokens.iter().map(|t| t.kind).collect::<Vec<Kind>>(),
-            vec![
-                Kind::Identifier("D"),
-                Kind::Equals,
-                Kind::Minus,
-                Kind::Number("1"),
-                Kind::Identifier("M"),
-                Kind::Equals,
-                Kind::Not,
-                Kind::Identifier("A"),
-                Kind::Identifier("D"),
-                Kind::Equals,
-                Kind::Identifier("M"),
-                Kind::Or,
-                Kind::Identifier("A"),
-                Kind::Number("0"),
-                Kind::Semicolon,
-                Kind::Identifier("JMP"),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_labels() {
-        let tokens = tokenize("(LOOP)\n@1\n (END) ");
-        assert_eq!(
-            tokens.iter().map(|t| t.kind).collect::<Vec<Kind>>(),
-            vec![
-                Kind::LParen,
-                Kind::Identifier("LOOP"),
-                Kind::RParen,
-                Kind::EOL,
-                Kind::AtSign,
+                Kind::Instruction("push"),
+                Kind::Segment("local"),
                 Kind::Number("1"),
                 Kind::EOL,
-                Kind::LParen,
-                Kind::Identifier("END"),
-                Kind::RParen
+                Kind::Instruction("pop"),
+                Kind::Segment("constant"),
+                Kind::Number("250"),
+                Kind::EOL,
+                Kind::Instruction("add"),
+                Kind::EOL,
+                Kind::Instruction("sub"),
             ]
         );
     }
@@ -225,21 +178,17 @@ mod tests {
             vec![Kind::Comment("// foo"), Kind::EOL, Kind::Comment("// bar"),]
         );
 
-        let tokens = tokenize(" /!foo");
+        let tokens = tokenize(" /push");
         assert_eq!(
             tokens,
             vec![
                 Token {
-                    kind: Kind::Invalid('/'),
+                    kind: Kind::Invalid("/"),
                     span: Span::new(1, 2)
                 },
                 Token {
-                    kind: Kind::Not,
-                    span: Span::new(2, 3)
-                },
-                Token {
-                    kind: Kind::Identifier("foo"),
-                    span: Span::new(3, 6)
+                    kind: Kind::Instruction("push"),
+                    span: Span::new(2, 6)
                 }
             ]
         );
