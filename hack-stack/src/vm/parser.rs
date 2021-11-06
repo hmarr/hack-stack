@@ -26,7 +26,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<ast::Instruction>, Vec<SpanError>> {
+    pub fn parse(&mut self) -> Result<Vec<ast::Instruction<'a>>, Vec<SpanError>> {
         let mut instructions = vec![];
 
         let mut errors = vec![];
@@ -51,7 +51,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_instruction(&mut self) -> ParseResult<Option<ast::Instruction>> {
+    fn parse_instruction(&mut self) -> ParseResult<Option<ast::Instruction<'a>>> {
         while matches!(self.token.kind, Kind::EOL | Kind::Comment(_)) {
             self.advance();
         }
@@ -60,12 +60,15 @@ impl<'a> Parser<'a> {
             Kind::EOF => Ok(None),
             Kind::Instruction("push") => Ok(Some(self.parse_push()?)),
             Kind::Instruction("pop") => Ok(Some(self.parse_pop()?)),
+            Kind::Instruction("goto") => Ok(Some(self.parse_goto()?)),
+            Kind::Instruction("if-goto") => Ok(Some(self.parse_if_goto()?)),
+            Kind::Instruction("label") => Ok(Some(self.parse_label()?)),
             Kind::Instruction(_) => Ok(Some(self.parse_arithmetic_command()?)),
             _ => Err(self.unexpected_token_error("instruction")),
         }
     }
 
-    fn parse_push(&mut self) -> ParseResult<ast::Instruction> {
+    fn parse_push(&mut self) -> ParseResult<ast::Instruction<'a>> {
         let start = self.token.span.start;
         self.expect(Kind::Instruction("push"))?;
 
@@ -81,7 +84,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn parse_pop(&mut self) -> ParseResult<ast::Instruction> {
+    fn parse_pop(&mut self) -> ParseResult<ast::Instruction<'a>> {
         let start = self.token.span.start;
         self.expect(Kind::Instruction("pop"))?;
 
@@ -99,6 +102,45 @@ impl<'a> Parser<'a> {
         Ok(ast::Instruction::Pop(ast::PopInstruction {
             segment,
             offset,
+            span,
+        }))
+    }
+
+    fn parse_goto(&mut self) -> ParseResult<ast::Instruction<'a>> {
+        let start = self.token.span.start;
+        self.expect(Kind::Instruction("goto"))?;
+
+        let label = self.parse_ident()?;
+        let span = Span::new(start, self.prev_token.span.end);
+
+        self.eat_terminator()?;
+        Ok(ast::Instruction::Goto(ast::GotoInstruction { label, span }))
+    }
+
+    fn parse_if_goto(&mut self) -> ParseResult<ast::Instruction<'a>> {
+        let start = self.token.span.start;
+        self.expect(Kind::Instruction("if-goto"))?;
+
+        let label = self.parse_ident()?;
+        let span = Span::new(start, self.prev_token.span.end);
+
+        self.eat_terminator()?;
+        Ok(ast::Instruction::IfGoto(ast::IfGotoInstruction {
+            label,
+            span,
+        }))
+    }
+
+    fn parse_label(&mut self) -> ParseResult<ast::Instruction<'a>> {
+        let start = self.token.span.start;
+        self.expect(Kind::Instruction("label"))?;
+
+        let label = self.parse_ident()?;
+        let span = Span::new(start, self.prev_token.span.end);
+
+        self.eat_terminator()?;
+        Ok(ast::Instruction::Label(ast::LabelInstruction {
+            label,
             span,
         }))
     }
@@ -123,7 +165,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_arithmetic_command(&mut self) -> ParseResult<ast::Instruction> {
+    fn parse_arithmetic_command(&mut self) -> ParseResult<ast::Instruction<'a>> {
         if let Kind::Instruction(name) = self.token.kind {
             let instruction = match name {
                 "add" => ast::Instruction::Add(self.token.span),
@@ -149,6 +191,15 @@ impl<'a> Parser<'a> {
         let num = self.token_to_number()?;
         self.advance();
         Ok(num)
+    }
+
+    fn parse_ident(&mut self) -> ParseResult<&'a str> {
+        if let Kind::Ident(v) = self.token.kind {
+            self.advance();
+            Ok(v)
+        } else {
+            Err(self.unexpected_token_error("identifier"))
+        }
     }
 
     fn token_to_number(&mut self) -> ParseResult<u16> {
@@ -301,6 +352,28 @@ mod tests {
                 String::from("unexpected token `constant', expected newline"),
                 Span::new(4, 12)
             )])
+        );
+    }
+
+    #[test]
+    fn test_branching() {
+        let mut parser = Parser::new(Tokenizer::new("label FOO\ngoto FOO\nif-goto FOO"));
+        assert_eq!(
+            parser.parse(),
+            Ok(vec![
+                ast::Instruction::Label(ast::LabelInstruction {
+                    label: "FOO",
+                    span: Span::new(0, 9)
+                }),
+                ast::Instruction::Goto(ast::GotoInstruction {
+                    label: "FOO",
+                    span: Span::new(10, 18)
+                }),
+                ast::Instruction::IfGoto(ast::IfGotoInstruction {
+                    label: "FOO",
+                    span: Span::new(19, 30)
+                }),
+            ])
         );
     }
 }

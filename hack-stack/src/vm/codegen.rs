@@ -29,7 +29,7 @@ impl<'a> Codegen<'a> {
         }
     }
 
-    pub fn generate(&mut self, ast: &[ast::Instruction]) -> Result<&str, Vec<SpanError>> {
+    pub fn generate(&mut self, ast: &[ast::Instruction<'a>]) -> Result<&str, Vec<SpanError>> {
         let mut errors = vec![];
         for instruction in ast {
             // Emit a comment showing the VM instruction to make the assembly easier to read
@@ -48,6 +48,9 @@ impl<'a> Codegen<'a> {
                 ast::Instruction::And(_) => self.binary_op(PopOp::And),
                 ast::Instruction::Or(_) => self.binary_op(PopOp::Or),
                 ast::Instruction::Not(_) => self.not(),
+                ast::Instruction::Goto(goto) => self.goto(goto),
+                ast::Instruction::IfGoto(if_goto) => self.if_goto(if_goto),
+                ast::Instruction::Label(label) => self.label(label),
             };
             self.buf.push('\n');
 
@@ -214,6 +217,25 @@ impl<'a> Codegen<'a> {
         self.set_a("SP");
         self.emit("A=M-1");
         self.emit("M=!M");
+        Ok(())
+    }
+
+    fn goto(&mut self, inst: &ast::GotoInstruction) -> Result<(), String> {
+        self.set_a(inst.label);
+        self.emit("0;JMP");
+        Ok(())
+    }
+
+    fn if_goto(&mut self, inst: &ast::IfGotoInstruction) -> Result<(), String> {
+        self.dec_deref_sp();
+        self.emit("D=M");
+        self.set_a(inst.label);
+        self.emit("D;JNE");
+        Ok(())
+    }
+
+    fn label(&mut self, inst: &ast::LabelInstruction) -> Result<(), String> {
+        self.emit(&format!("({})", inst.label));
         Ok(())
     }
 
@@ -402,9 +424,7 @@ mod tests {
         pop that 3
         pop temp 2
         pop pointer 1";
-        // pop static 1
 
-        // SP-- ; D = *SP ; LCL+6 = D
         let expected = "
         // pop static 7
         @SP
@@ -587,6 +607,30 @@ mod tests {
         @SP
         A=M-1
         M=!M";
+        check_translation(src, expected);
+    }
+
+    #[test]
+    fn test_branching() {
+        let src = "
+        goto FOO
+        label FOO
+        if-goto FOO";
+
+        let expected = "
+        // goto FOO
+        @FOO
+        0;JMP
+
+        // label FOO
+        (FOO)
+
+        // if-goto FOO
+        @SP
+        AM=M-1
+        D=M
+        @FOO
+        D;JNE";
         check_translation(src, expected);
     }
 

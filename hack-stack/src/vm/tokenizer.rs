@@ -40,7 +40,7 @@ impl<'a> Tokenizer<'a> {
                 token
             }
             '0'..='9' => self.tokenize_number(),
-            c if c.is_lowercase() => self.tokenize_identifier(),
+            c if ident_char(c) => self.tokenize_keyword_or_ident(),
             EOF_CHAR => {
                 self.cursor.advance();
                 Token::eof(start_pos)
@@ -65,17 +65,17 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn tokenize_identifier(&mut self) -> Token<'a> {
-        let span = self.cursor.eat_while(|c| c.is_lowercase());
+    fn tokenize_keyword_or_ident(&mut self) -> Token<'a> {
+        let span = self.cursor.eat_while(|c| ident_char(c));
         let ident = &self.src[span.start..span.end];
-        let kind =
-            match ident {
-                "push" | "pop" | "add" | "sub" | "neg" | "and" | "or" | "not" | "eq" | "lt"
-                | "gt" => Kind::Instruction(ident),
-                "constant" | "local" | "argument" | "static" | "this" | "that" | "temp"
-                | "pointer" => Kind::Segment(ident),
-                _ => Kind::Invalid(ident),
-            };
+        let kind = match ident {
+            "push" | "pop" | "add" | "sub" | "neg" | "and" | "or" | "not" | "eq" | "lt" | "gt"
+            | "label" | "goto" | "if-goto" => Kind::Instruction(ident),
+            "constant" | "local" | "argument" | "static" | "this" | "that" | "temp" | "pointer" => {
+                Kind::Segment(ident)
+            }
+            _ => Kind::Ident(ident),
+        };
         Token { kind, span }
     }
 
@@ -91,6 +91,14 @@ impl<'a> Tokenizer<'a> {
         while self.cursor.c.is_whitespace() && self.cursor.c != '\n' {
             self.cursor.advance();
         }
+    }
+}
+
+fn ident_char(c: char) -> bool {
+    match c {
+        c if c.is_alphanumeric() => true,
+        '_' | '.' | '$' | ':' | '-' => true,
+        _ => false,
     }
 }
 
@@ -151,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_instructions() {
-        let tokens = tokenize("push local 1\n pop constant 250 \nadd\nsub");
+        let tokens = tokenize("push local 1\n pop constant 250 \nadd\nsub\ngoto FOO");
         assert_eq!(
             tokens.iter().map(|t| t.kind).collect::<Vec<Kind>>(),
             vec![
@@ -166,6 +174,9 @@ mod tests {
                 Kind::Instruction("add"),
                 Kind::EOL,
                 Kind::Instruction("sub"),
+                Kind::EOL,
+                Kind::Instruction("goto"),
+                Kind::Ident("FOO"),
             ]
         );
     }

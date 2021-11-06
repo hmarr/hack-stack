@@ -108,6 +108,51 @@ fn test_stack_test() {
     assert_eq!(ram[265], 0u16.wrapping_sub(91));
 }
 
+#[test]
+fn test_basic_loop() {
+    let asm_src = vm_to_asm(&load_fixture("BasicLoop.vm"));
+    let hack_src = assemble(&asm_src);
+    let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
+
+    emu.set_memory(0, 256).unwrap();
+    emu.set_memory(1, 300).unwrap();
+    emu.set_memory(2, 400).unwrap();
+    emu.set_memory(400, 3).unwrap();
+
+    for _ in 0..600 {
+        emu.step().unwrap();
+    }
+
+    let ram = emu.memory();
+    assert_eq!(ram[0], 257);
+    assert_eq!(ram[256], 6);
+}
+
+#[test]
+fn test_fibonacci_series() {
+    let asm_src = vm_to_asm(&load_fixture("FibonacciSeries.vm"));
+    let hack_src = assemble(&asm_src);
+    let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
+
+    emu.set_memory(0, 256).unwrap();
+    emu.set_memory(1, 300).unwrap();
+    emu.set_memory(2, 400).unwrap();
+    emu.set_memory(400, 6).unwrap();
+    emu.set_memory(401, 3000).unwrap();
+
+    for _ in 0..1100 {
+        emu.step().unwrap();
+    }
+
+    let ram = emu.memory();
+    assert_eq!(ram[3000], 0);
+    assert_eq!(ram[3001], 1);
+    assert_eq!(ram[3002], 1);
+    assert_eq!(ram[3003], 2);
+    assert_eq!(ram[3004], 3);
+    assert_eq!(ram[3005], 5);
+}
+
 fn vm_to_asm(src: &str) -> String {
     let source_file = common::SourceFile::new(src, "Test.vm");
     let tokenizer = vm::Tokenizer::new(src);
