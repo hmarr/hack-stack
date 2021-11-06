@@ -160,8 +160,11 @@ impl<'a> Codegen<'a> {
     fn binary_op(&mut self, op: PopOp) -> Result<(), String> {
         // Assign the top-of-stack operand (operand 2) to D
         self.popd(PopOp::Assign);
-        // Apply the operation to the next operand (operand 1) to D
-        self.dec_deref_sp();
+        // At this point, we've decremented SP by one, which is where we want SP
+        // to end up (as we're going from two operands to one return value).
+        // Rather than popping the next operand then pushing the result, we just
+        // decrement A and modify the memory location in-place.
+        self.emit("A=A-1");
         match op {
             PopOp::Assign => self.emit("M=M"),
             PopOp::Add => self.emit("M=D+M"),
@@ -169,8 +172,6 @@ impl<'a> Codegen<'a> {
             PopOp::Or => self.emit("M=D|M"),
             PopOp::MSubD => self.emit("M=M-D"),
         }
-        // Return the result to the stack
-        self.inc_sp();
         Ok(())
     }
 
@@ -203,17 +204,16 @@ impl<'a> Codegen<'a> {
     }
 
     fn neg(&mut self) -> Result<(), String> {
-        self.dec_deref_sp();
-        self.emit("M=!M");
-        self.emit("M=M+1");
-        self.inc_sp();
+        self.set_a("SP");
+        self.emit("A=M-1");
+        self.emit("M=-M");
         Ok(())
     }
 
     fn not(&mut self) -> Result<(), String> {
-        self.dec_deref_sp();
+        self.set_a("SP");
+        self.emit("A=M-1");
         self.emit("M=!M");
-        self.inc_sp();
         Ok(())
     }
 
@@ -503,21 +503,15 @@ mod tests {
         @SP
         AM=M-1
         D=M
-        @SP
-        AM=M-1
+        A=A-1
         M=D+M
-        @SP
-        M=M+1
         
         // sub
         @SP
         AM=M-1
         D=M
-        @SP
-        AM=M-1
+        A=A-1
         M=M-D
-        @SP
-        M=M+1
         
         // eq
         @SP
@@ -572,38 +566,27 @@ mod tests {
 
         // neg
         @SP
-        AM=M-1
-        M=!M
-        M=M+1
-        @SP
-        M=M+1
+        A=M-1
+        M=-M
 
         // and
         @SP
         AM=M-1
         D=M
-        @SP
-        AM=M-1
+        A=A-1
         M=D&M
-        @SP
-        M=M+1
 
         // or
         @SP
         AM=M-1
         D=M
-        @SP
-        AM=M-1
+        A=A-1
         M=D|M
-        @SP
-        M=M+1
         
         // not
         @SP
-        AM=M-1
-        M=!M
-        @SP
-        M=M+1";
+        A=M-1
+        M=!M";
         check_translation(src, expected);
     }
 
