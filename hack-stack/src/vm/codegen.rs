@@ -280,9 +280,9 @@ impl<'a> Codegen<'a> {
 
     fn pushd(&mut self) {
         self.set_a("SP");
-        self.emit("A=M");
+        self.emit("M=M+1");
+        self.emit("A=M-1");
         self.emit("M=D");
-        self.inc_sp();
     }
 
     fn inc_sp(&mut self) {
@@ -332,19 +332,17 @@ mod tests {
         @8
         D=A
         @SP
-        A=M
-        M=D
-        @SP
         M=M+1
+        A=M-1
+        M=D
 
         // push static 7
         @Test.7
         D=M
         @SP
-        A=M
-        M=D
-        @SP
         M=M+1
+        A=M-1
+        M=D
         
         // push local 6
         @6
@@ -353,10 +351,9 @@ mod tests {
         A=D+M
         D=M
         @SP
-        A=M
-        M=D
-        @SP
         M=M+1
+        A=M-1
+        M=D
 
         // push argument 5
         @5
@@ -365,10 +362,9 @@ mod tests {
         A=D+M
         D=M
         @SP
-        A=M
-        M=D
-        @SP
         M=M+1
+        A=M-1
+        M=D
 
         // push this 4
         @4
@@ -377,10 +373,9 @@ mod tests {
         A=D+M
         D=M
         @SP
-        A=M
-        M=D
-        @SP
         M=M+1
+        A=M-1
+        M=D
 
         // push that 3
         @3
@@ -389,28 +384,25 @@ mod tests {
         A=D+M
         D=M
         @SP
-        A=M
-        M=D
-        @SP
         M=M+1
+        A=M-1
+        M=D
         
         // push temp 2
         @7
         D=M
         @SP
-        A=M
-        M=D
-        @SP
         M=M+1
+        A=M-1
+        M=D
         
         // push pointer 1
         @4
         D=M
         @SP
-        A=M
-        M=D
-        @SP
-        M=M+1";
+        M=M+1
+        A=M-1
+        M=D";
         check_translation(src, expected);
     }
 
