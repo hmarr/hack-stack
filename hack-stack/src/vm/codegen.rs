@@ -51,6 +51,9 @@ impl<'a> Codegen<'a> {
                 ast::Instruction::Goto(goto) => self.goto(goto),
                 ast::Instruction::IfGoto(if_goto) => self.if_goto(if_goto),
                 ast::Instruction::Label(label) => self.label(label),
+                ast::Instruction::Function(function) => self.function(function),
+                ast::Instruction::Return(_) => self.return_(),
+                ast::Instruction::Call(call) => self.call(call),
             };
             self.buf.push('\n');
 
@@ -236,6 +239,97 @@ impl<'a> Codegen<'a> {
 
     fn label(&mut self, inst: &ast::LabelInstruction) -> Result<(), String> {
         self.emit(&format!("({})", inst.label));
+        Ok(())
+    }
+
+    fn function(&mut self, inst: &ast::FunctionInstruction) -> Result<(), String> {
+        self.emit(&format!("({})", inst.name));
+
+        // Initialise each of the locals to zero
+        for _ in 0..inst.locals {
+            self.set_a("SP");
+            self.emit("M=M+1");
+            self.emit("A=M-1");
+            self.emit("M=0");
+        }
+        Ok(())
+    }
+
+    fn return_(&mut self) -> Result<(), String> {
+        // Save return address to R13
+        self.set_a("5");
+        self.emit("D=A");
+        self.set_a("LCL");
+        self.emit("A=M-D");
+        self.emit("D=M");
+        self.set_a("R13");
+        self.emit("M=D");
+
+        // Copy the return value to *ARG (the top of the caller's stack)
+        self.popd(PopOp::Assign);
+        self.set_a("ARG");
+        self.emit("A=M");
+        self.emit("M=D");
+
+        // Set SP=ARG+1
+        self.emit("D=A+1");
+        self.set_a("SP");
+        self.emit("M=D");
+
+        // Restore segment pointers from stack frame
+        for segment in ["THAT", "THIS", "ARG", "LCL"] {
+            self.set_a("LCL");
+            self.emit("AM=M-1");
+            self.emit("D=M");
+            self.set_a(segment);
+            self.emit("M=D");
+        }
+
+        // Jump to the return address
+        self.set_a("R13");
+        self.emit("A=M");
+        self.emit("0;JMP");
+
+        Ok(())
+    }
+
+    fn call(&mut self, inst: &ast::CallInstruction) -> Result<(), String> {
+        // Push the return label (File$ret.n) to the stack
+        let ret = &format!("{}$ret.{}", self.static_prefix, self.next_label_index);
+        self.next_label_index += 1;
+        self.set_a(ret);
+        self.emit("D=A");
+        self.pushd();
+
+        // Save segment pointers to stack frame
+        for segment in ["LCL", "ARG", "THIS", "THAT"] {
+            self.set_a(segment);
+            self.emit("D=M");
+            self.pushd();
+        }
+
+        // Reposition ARG
+        // Set D to SP value (A=*SP after pushd)
+        self.emit("D=M");
+        // Subtract 4 (saved segment pointers) + 1 (return addr) + args to get the ARG pointer
+        self.set_a(&(5 + inst.args).to_string());
+        self.emit("D=D-A");
+        self.set_a("ARG");
+        self.emit("M=D");
+
+        // Reposition LCL
+        self.set_a("SP");
+        self.emit("D=M");
+        self.set_a("LCL");
+        self.emit("M=D");
+
+        // Jump to function
+        self.set_a(inst.function);
+        self.emit("0;JMP");
+
+        // Return label - this is where we come back to once the function call ends
+        self.emit(&format!("({})", ret));
+
         Ok(())
     }
 
@@ -623,6 +717,113 @@ mod tests {
         D=M
         @FOO
         D;JNE";
+        check_translation(src, expected);
+    }
+
+    #[test]
+    fn test_functions() {
+        let src = "
+        function Test.foo 2
+        return
+        call Test.foo 3";
+
+        let expected = "
+        // function Test.foo 2
+        (Test.foo)
+        @SP
+        M=M+1
+        A=M-1
+        M=0
+        @SP
+        M=M+1
+        A=M-1
+        M=0
+
+        // return
+        @5
+        D=A
+        @LCL
+        A=M-D
+        D=M
+        @R13
+        M=D
+        @SP
+        AM=M-1
+        D=M
+        @ARG
+        A=M
+        M=D
+        D=A+1
+        @SP
+        M=D
+        @LCL
+        AM=M-1
+        D=M
+        @THAT
+        M=D
+        @LCL
+        AM=M-1
+        D=M
+        @THIS
+        M=D
+        @LCL
+        AM=M-1
+        D=M
+        @ARG
+        M=D
+        @LCL
+        AM=M-1
+        D=M
+        @LCL
+        M=D
+        @R13
+        A=M
+        0;JMP
+
+        // call Test.foo 3
+        @Test$ret.0
+        D=A
+        @SP
+        M=M+1
+        A=M-1
+        M=D
+        @LCL
+        D=M
+        @SP
+        M=M+1
+        A=M-1
+        M=D
+        @ARG
+        D=M
+        @SP
+        M=M+1
+        A=M-1
+        M=D
+        @THIS
+        D=M
+        @SP
+        M=M+1
+        A=M-1
+        M=D
+        @THAT
+        D=M
+        @SP
+        M=M+1
+        A=M-1
+        M=D
+        D=M
+        @8
+        D=D-A
+        @ARG
+        M=D
+        @SP
+        D=M
+        @LCL
+        M=D
+        @Test.foo
+        0;JMP
+        (Test$ret.0)";
+
         check_translation(src, expected);
     }
 

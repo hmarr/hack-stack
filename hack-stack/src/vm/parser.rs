@@ -63,6 +63,9 @@ impl<'a> Parser<'a> {
             Kind::Instruction("goto") => Ok(Some(self.parse_goto()?)),
             Kind::Instruction("if-goto") => Ok(Some(self.parse_if_goto()?)),
             Kind::Instruction("label") => Ok(Some(self.parse_label()?)),
+            Kind::Instruction("function") => Ok(Some(self.parse_function()?)),
+            Kind::Instruction("return") => Ok(Some(self.parse_return()?)),
+            Kind::Instruction("call") => Ok(Some(self.parse_call()?)),
             Kind::Instruction(_) => Ok(Some(self.parse_arithmetic_command()?)),
             _ => Err(self.unexpected_token_error("instruction")),
         }
@@ -141,6 +144,47 @@ impl<'a> Parser<'a> {
         self.eat_terminator()?;
         Ok(ast::Instruction::Label(ast::LabelInstruction {
             label,
+            span,
+        }))
+    }
+
+    fn parse_function(&mut self) -> ParseResult<ast::Instruction<'a>> {
+        let start = self.token.span.start;
+        self.expect(Kind::Instruction("function"))?;
+
+        let name = self.parse_ident()?;
+        let locals = self.parse_number()?;
+        let span = Span::new(start, self.prev_token.span.end);
+
+        self.eat_terminator()?;
+        Ok(ast::Instruction::Function(ast::FunctionInstruction {
+            name,
+            locals,
+            span,
+        }))
+    }
+
+    fn parse_return(&mut self) -> ParseResult<ast::Instruction<'a>> {
+        let start = self.token.span.start;
+        self.expect(Kind::Instruction("return"))?;
+
+        let span = Span::new(start, self.prev_token.span.end);
+        self.eat_terminator()?;
+        Ok(ast::Instruction::Return(span))
+    }
+
+    fn parse_call(&mut self) -> ParseResult<ast::Instruction<'a>> {
+        let start = self.token.span.start;
+        self.expect(Kind::Instruction("call"))?;
+
+        let function = self.parse_ident()?;
+        let args = self.parse_number()?;
+        let span = Span::new(start, self.prev_token.span.end);
+
+        self.eat_terminator()?;
+        Ok(ast::Instruction::Call(ast::CallInstruction {
+            function,
+            args,
             span,
         }))
     }
@@ -372,6 +416,29 @@ mod tests {
                 ast::Instruction::IfGoto(ast::IfGotoInstruction {
                     label: "FOO",
                     span: Span::new(19, 30)
+                }),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_functions() {
+        let mut parser = Parser::new(Tokenizer::new(
+            "function Thing.foo 3\nreturn\ncall Thing.foo 2",
+        ));
+        assert_eq!(
+            parser.parse(),
+            Ok(vec![
+                ast::Instruction::Function(ast::FunctionInstruction {
+                    name: "Thing.foo",
+                    locals: 3,
+                    span: Span::new(0, 20)
+                }),
+                ast::Instruction::Return(Span::new(21, 27)),
+                ast::Instruction::Call(ast::CallInstruction {
+                    function: "Thing.foo",
+                    args: 2,
+                    span: Span::new(28, 44)
                 }),
             ])
         );

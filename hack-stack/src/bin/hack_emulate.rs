@@ -25,9 +25,9 @@ fn emulate_main() -> Result<(), ()> {
         eprintln!("reading {}: {}", source_path, err);
     })?;
 
-    let mut rom = Vec::<u16>::with_capacity(0x2000);
-    for line in source.lines() {
-        rom.push(u16::from_str_radix(line.trim_end(), 2).unwrap());
+    let mut rom = vec![0u16; 0x2000];
+    for (i, line) in source.lines().enumerate() {
+        rom[i] = u16::from_str_radix(line.trim_end(), 2).unwrap();
     }
 
     let mut emulator = emulator::Emulator::new(rom);

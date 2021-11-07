@@ -70,7 +70,9 @@ impl<'a> Tokenizer<'a> {
         let ident = &self.src[span.start..span.end];
         let kind = match ident {
             "push" | "pop" | "add" | "sub" | "neg" | "and" | "or" | "not" | "eq" | "lt" | "gt"
-            | "label" | "goto" | "if-goto" => Kind::Instruction(ident),
+            | "label" | "goto" | "if-goto" | "function" | "call" | "return" => {
+                Kind::Instruction(ident)
+            }
             "constant" | "local" | "argument" | "static" | "this" | "that" | "temp" | "pointer" => {
                 Kind::Segment(ident)
             }
@@ -97,7 +99,7 @@ impl<'a> Tokenizer<'a> {
 fn ident_char(c: char) -> bool {
     match c {
         c if c.is_alphanumeric() => true,
-        '_' | '.' | '$' | ':' | '-' => true,
+        '_' | '.' | ':' | '-' => true,
         _ => false,
     }
 }

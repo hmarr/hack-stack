@@ -16,6 +16,9 @@ pub enum Instruction<'a> {
     Goto(GotoInstruction<'a>),
     IfGoto(IfGotoInstruction<'a>),
     Label(LabelInstruction<'a>),
+    Function(FunctionInstruction<'a>),
+    Return(Span),
+    Call(CallInstruction<'a>),
 }
 
 impl<'a> Instruction<'a> {
@@ -35,6 +38,9 @@ impl<'a> Instruction<'a> {
             Self::Goto(goto) => goto.span,
             Self::IfGoto(if_goto) => if_goto.span,
             Self::Label(label) => label.span,
+            Self::Function(function) => function.span,
+            Self::Return(span) => *span,
+            Self::Call(call) => call.span,
         }
     }
 }
@@ -68,6 +74,20 @@ pub struct IfGotoInstruction<'a> {
 #[derive(Debug, PartialEq)]
 pub struct LabelInstruction<'a> {
     pub label: &'a str,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FunctionInstruction<'a> {
+    pub name: &'a str,
+    pub locals: u16,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CallInstruction<'a> {
+    pub function: &'a str,
+    pub args: u16,
     pub span: Span,
 }
 

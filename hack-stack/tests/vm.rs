@@ -153,6 +153,38 @@ fn test_fibonacci_series() {
     assert_eq!(ram[3005], 5);
 }
 
+#[test]
+fn test_simple_function() {
+    let asm_src = vm_to_asm(&load_fixture("SimpleFunction.vm"));
+    let hack_src = assemble(&asm_src);
+    let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
+
+    emu.set_memory(0, 317).unwrap();
+    emu.set_memory(1, 317).unwrap();
+    emu.set_memory(2, 310).unwrap();
+    emu.set_memory(3, 3000).unwrap();
+    emu.set_memory(4, 4000).unwrap();
+    emu.set_memory(310, 1234).unwrap();
+    emu.set_memory(311, 37).unwrap();
+    emu.set_memory(312, 1000).unwrap();
+    emu.set_memory(313, 305).unwrap();
+    emu.set_memory(314, 300).unwrap();
+    emu.set_memory(315, 3010).unwrap();
+    emu.set_memory(316, 4010).unwrap();
+
+    for _ in 0..300 {
+        emu.step().unwrap();
+    }
+
+    let ram = emu.memory();
+    assert_eq!(ram[0], 311);
+    assert_eq!(ram[1], 305);
+    assert_eq!(ram[2], 300);
+    assert_eq!(ram[3], 3010);
+    assert_eq!(ram[4], 4010);
+    assert_eq!(ram[310], 1196);
+}
+
 fn vm_to_asm(src: &str) -> String {
     let source_file = common::SourceFile::new(src, "Test.vm");
     let tokenizer = vm::Tokenizer::new(src);
@@ -169,9 +201,9 @@ fn assemble(asm_src: &str) -> String {
 }
 
 fn parse_rom(hack_src: &str) -> Vec<u16> {
-    let mut rom = Vec::<u16>::with_capacity(0x2000);
-    for line in hack_src.lines() {
-        rom.push(u16::from_str_radix(line.trim_end(), 2).unwrap());
+    let mut rom = vec![0u16; 0x2000];
+    for (i, line) in hack_src.lines().enumerate() {
+        rom[i] = u16::from_str_radix(line.trim_end(), 2).unwrap();
     }
     rom
 }
