@@ -23,8 +23,8 @@ fn assemble_main() -> Result<(), ()> {
         eprintln!("reading {}: {}", source_path, err);
     })?;
 
-    let source_file = common::SourceFile::new(&source, source_path);
-    let tokenizer = asm::Tokenizer::new(&source);
+    let source_file = common::SourceFile::new(source, source_path.to_owned());
+    let tokenizer = asm::Tokenizer::new(&source_file.src);
     let mut parser = asm::Parser::new(tokenizer);
     let instructions = match parser.parse() {
         Ok(instructions) => instructions,

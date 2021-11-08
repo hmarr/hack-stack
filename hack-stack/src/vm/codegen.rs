@@ -2,7 +2,7 @@ use super::ast;
 use crate::common::{SourceFile, SpanError};
 
 pub struct Codegen<'a> {
-    source_file: &'a SourceFile<'a>,
+    source_file: &'a SourceFile,
     buf: String,
     static_prefix: String,
     next_label_index: usize,
@@ -20,11 +20,11 @@ const TEMP_BASE_ADDR: u16 = 5;
 const POINTER_BASE_ADDR: u16 = 3;
 
 impl<'a> Codegen<'a> {
-    pub fn new(source_file: &'a SourceFile<'a>) -> Self {
+    pub fn new(source_file: &'a SourceFile) -> Self {
         Self {
             source_file,
             buf: String::new(),
-            static_prefix: source_file.name.replace(".vm", ""),
+            static_prefix: source_file.name.replace(".vm", "").replace("/", "$"),
             next_label_index: 0,
         }
     }
@@ -309,8 +309,8 @@ impl<'a> Codegen<'a> {
         }
 
         // Reposition ARG
-        // Set D to SP value (A=*SP after pushd)
-        self.emit("D=M");
+        // Set D to SP value (A=*SP-1 after pushd)
+        self.emit("D=A+1");
         // Subtract 4 (saved segment pointers) + 1 (return addr) + args to get the ARG pointer
         self.set_a(&(5 + inst.args).to_string());
         self.emit("D=D-A");
@@ -811,7 +811,7 @@ mod tests {
         M=M+1
         A=M-1
         M=D
-        D=M
+        D=A+1
         @8
         D=D-A
         @ARG
@@ -839,7 +839,7 @@ mod tests {
 
     fn translate(vm_src: &str) -> String {
         let mut parser = Parser::new(Tokenizer::new(vm_src));
-        let source_file = SourceFile::new(vm_src, "Test.vm");
+        let source_file = SourceFile::new(vm_src.to_owned(), "Test.vm".to_owned());
         let mut cg = Codegen::new(&source_file);
         cg.generate(&parser.parse().unwrap()).unwrap().to_owned()
     }

@@ -1,13 +1,14 @@
 use super::Span;
 
-pub struct SourceFile<'a> {
-    pub name: &'a str,
-    src: &'a str,
+#[derive(Debug)]
+pub struct SourceFile {
+    pub name: String,
+    pub src: String,
     lines: Vec<usize>,
 }
 
-impl<'a> SourceFile<'a> {
-    pub fn new(src: &'a str, name: &'a str) -> Self {
+impl SourceFile {
+    pub fn new(src: String, name: String) -> Self {
         let mut lines = vec![];
         for (pos, c) in src.char_indices() {
             if c == '\n' {
@@ -43,7 +44,7 @@ mod tests {
 
     #[test]
     fn test_loc_for_byte_pos() {
-        let t = SourceFile::new("á\néf\n\ng", "Test.foo");
+        let t = SourceFile::new("á\néf\n\ng".to_owned(), "Test.foo".to_owned());
 
         assert_eq!(t.loc_for_byte_pos(0), (1, 1)); // á
         assert_eq!(t.loc_for_byte_pos(2), (1, 2)); // \n
