@@ -160,10 +160,10 @@ impl<'a> Codegen<'a> {
                     (D, Minus, Register(M)) => 0b1_010011,
                     (A, Minus, Register(D)) => 0b0_000111,
                     (M, Minus, Register(D)) => 0b1_000111,
-                    (D, And, Register(A)) => 0b0_000000,
-                    (D, And, Register(M)) => 0b1_000000,
-                    (D, Or, Register(A)) => 0b0_010101,
-                    (D, Or, Register(M)) => 0b1_010101,
+                    (D, And, Register(A)) | (A, And, Register(D)) => 0b0_000000,
+                    (D, And, Register(M)) | (M, And, Register(D)) => 0b1_000000,
+                    (D, Or, Register(A)) | (A, Or, Register(D)) => 0b0_010101,
+                    (D, Or, Register(M)) | (M, Or, Register(D)) => 0b1_010101,
                     _ => return Err(format!("invalid operation {:?} {:?} {:?}", lhs, op, rhs)),
                 }
             }
