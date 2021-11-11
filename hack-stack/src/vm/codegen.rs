@@ -6,6 +6,7 @@ pub struct Codegen<'a> {
     buf: String,
     static_prefix: String,
     next_label_index: usize,
+    emitted_return_def: bool,
 }
 
 enum PopOp {
@@ -26,6 +27,7 @@ impl<'a> Codegen<'a> {
             buf: String::new(),
             static_prefix: source_file.name.replace(".vm", "").replace("/", ":"),
             next_label_index: 0,
+            emitted_return_def: false,
         }
     }
 
@@ -256,6 +258,20 @@ impl<'a> Codegen<'a> {
     }
 
     fn return_(&mut self) -> Result<(), String> {
+        if !self.emitted_return_def {
+            self.return_def();
+            self.emitted_return_def = true;
+        }
+
+        self.set_a("$vm.return");
+        self.emit("0;JMP");
+
+        Ok(())
+    }
+
+    fn return_def(&mut self) {
+        self.emit("($vm.return)");
+
         // Save return address to R13
         self.set_a("5");
         self.emit("D=A");
@@ -289,8 +305,6 @@ impl<'a> Codegen<'a> {
         self.set_a("R13");
         self.emit("A=M");
         self.emit("0;JMP");
-
-        Ok(())
     }
 
     fn call(&mut self, inst: &ast::CallInstruction) -> Result<(), String> {
@@ -728,7 +742,8 @@ mod tests {
         let src = "
         function Test.foo 2
         return
-        call Test.foo 3";
+        call Test.foo 3
+        return";
 
         let expected = "
         // function Test.foo 2
@@ -743,6 +758,7 @@ mod tests {
         M=0
 
         // return
+        ($vm.return)
         @5
         D=A
         @LCL
@@ -782,9 +798,11 @@ mod tests {
         @R13
         A=M
         0;JMP
+        @$vm.return
+        0;JMP
 
         // call Test.foo 3
-        @Test$ret.0
+        @Test$Test.foo$ret.0
         D=A
         @SP
         M=M+1
@@ -825,7 +843,11 @@ mod tests {
         M=D
         @Test.foo
         0;JMP
-        (Test$ret.0)";
+        (Test$Test.foo$ret.0)
+        
+        // return
+        @$vm.return
+        0;JMP";
 
         check_translation(src, expected);
     }
