@@ -25,7 +25,7 @@ fn emulate_main() -> Result<(), ()> {
         eprintln!("reading {}: {}", source_path, err);
     })?;
 
-    let mut rom = vec![0u16; 0x2000];
+    let mut rom = vec![0u16; 0x8000];
     for (i, line) in source.lines().enumerate() {
         rom[i] = u16::from_str_radix(line.trim_end(), 2).unwrap();
     }

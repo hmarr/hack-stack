@@ -85,7 +85,10 @@ fn translate_main() -> Result<(), ()> {
 fn display_span_errors(source_file: &common::SourceFile, errs: Vec<common::SpanError>) {
     for err in errs {
         let (line, col) = source_file.loc_for_byte_pos(err.span.start);
-        eprintln!("line {}, char {}: {}", line, col, err.msg);
+        eprintln!(
+            "{} (line {}, char {}): {}",
+            source_file.name, line, col, err.msg
+        );
     }
     std::process::exit(1);
 }
