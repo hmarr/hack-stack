@@ -24,7 +24,7 @@ impl<'a> Codegen<'a> {
         Self {
             source_file,
             buf: String::new(),
-            static_prefix: source_file.name.replace(".vm", "").replace("/", "$"),
+            static_prefix: source_file.name.replace(".vm", "").replace("/", ":"),
             next_label_index: 0,
         }
     }
@@ -65,8 +65,8 @@ impl<'a> Codegen<'a> {
 
         // At the end of the program, enter an infinite loop to avoid running
         // the program counter into unknown territory
-        self.emit("(VM_END_LOOP)");
-        self.emit("@VM_END_LOOP");
+        self.emit("($vm.infinite_loop)");
+        self.emit("@$vm.infinite_loop");
         self.emit("0;JMP");
 
         if errors.is_empty() {
@@ -190,7 +190,7 @@ impl<'a> Codegen<'a> {
         self.emit("M=-1");
 
         // Generate unique lable to jump to the end
-        let end_label = format!("{}:END_CMP.{}", self.static_prefix, self.next_label_index);
+        let end_label = format!("{}$cmp_end.{}", self.static_prefix, self.next_label_index);
         self.next_label_index += 1;
         self.set_a(&end_label);
 
@@ -224,7 +224,7 @@ impl<'a> Codegen<'a> {
     }
 
     fn goto(&mut self, inst: &ast::GotoInstruction) -> Result<(), String> {
-        self.set_a(inst.label);
+        self.set_a(&format!("{}${}", self.static_prefix, inst.label));
         self.emit("0;JMP");
         Ok(())
     }
@@ -232,13 +232,13 @@ impl<'a> Codegen<'a> {
     fn if_goto(&mut self, inst: &ast::IfGotoInstruction) -> Result<(), String> {
         self.dec_deref_sp();
         self.emit("D=M");
-        self.set_a(inst.label);
+        self.set_a(&format!("{}${}", self.static_prefix, inst.label));
         self.emit("D;JNE");
         Ok(())
     }
 
     fn label(&mut self, inst: &ast::LabelInstruction) -> Result<(), String> {
-        self.emit(&format!("({})", inst.label));
+        self.emit(&format!("({}${})", self.static_prefix, inst.label));
         Ok(())
     }
 
@@ -294,8 +294,11 @@ impl<'a> Codegen<'a> {
     }
 
     fn call(&mut self, inst: &ast::CallInstruction) -> Result<(), String> {
-        // Push the return label (File$ret.n) to the stack
-        let ret = &format!("{}$ret.{}", self.static_prefix, self.next_label_index);
+        // Push the return label (File$function$ret.n) to the stack
+        let ret = &format!(
+            "{}${}$ret.{}",
+            self.static_prefix, inst.function, self.next_label_index
+        );
         self.next_label_index += 1;
         self.set_a(ret);
         self.emit("D=A");
@@ -627,12 +630,12 @@ mod tests {
         AM=M-1
         D=M-D
         M=-1
-        @Test:END_CMP.0
+        @Test$cmp_end.0
         D;JEQ
         @SP
         A=M
         M=0
-        (Test:END_CMP.0)
+        (Test$cmp_end.0)
         @SP
         M=M+1
         
@@ -644,12 +647,12 @@ mod tests {
         AM=M-1
         D=M-D
         M=-1
-        @Test:END_CMP.1
+        @Test$cmp_end.1
         D;JGT
         @SP
         A=M
         M=0
-        (Test:END_CMP.1)
+        (Test$cmp_end.1)
         @SP
         M=M+1
         
@@ -661,12 +664,12 @@ mod tests {
         AM=M-1
         D=M-D
         M=-1
-        @Test:END_CMP.2
+        @Test$cmp_end.2
         D;JLT
         @SP
         A=M
         M=0
-        (Test:END_CMP.2)
+        (Test$cmp_end.2)
         @SP
         M=M+1
 
@@ -705,17 +708,17 @@ mod tests {
 
         let expected = "
         // goto FOO
-        @FOO
+        @Test$FOO
         0;JMP
 
         // label FOO
-        (FOO)
+        (Test$FOO)
 
         // if-goto FOO
         @SP
         AM=M-1
         D=M
-        @FOO
+        @Test$FOO
         D;JNE";
         check_translation(src, expected);
     }
@@ -829,8 +832,8 @@ mod tests {
 
     fn check_translation(vm_src: &str, expected_asm: &str) {
         let epilogue = "
-        (VM_END_LOOP)
-        @VM_END_LOOP
+        ($vm.infinite_loop)
+        @$vm.infinite_loop
         0;JMP";
 
         let full_asm = format!("{}\n{}", expected_asm, epilogue);
