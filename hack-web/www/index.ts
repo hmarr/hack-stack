@@ -2,6 +2,7 @@ import { HackEmulator } from '../pkg'
 import { CpuView } from './cpu-view'
 import { PerfView } from './perf-view';
 import { ScreenView } from './screen-view'
+import { RomLoader } from './rom-loader';
 
 class App {
   emulator: HackEmulator;
@@ -11,7 +12,6 @@ class App {
   running: boolean;
   lastFrameTime: number;
   startBtn: HTMLButtonElement;
-  romInput: HTMLTextAreaElement;
 
   constructor() {
     this.emulator = new HackEmulator();
@@ -42,11 +42,6 @@ class App {
     screenEl.append(this.screenView.el);
     appEl.append(screenEl);
 
-    this.romInput = document.createElement('textarea');
-    this.romInput.placeholder = 'ROM (hack binary format)';
-    this.romInput.style.marginTop = '20px';
-    diagsEl.append(this.romInput);
-
     const controlsEl = document.createElement('div');
     controlsEl.style.marginTop = '20px';
 
@@ -64,16 +59,14 @@ class App {
     stepBtn.addEventListener('click', () => this.update(1));
     controlsEl.append(stepBtn);
 
-    const loadBtn = document.createElement('button');
-    loadBtn.innerText = 'Load ROM';
-    loadBtn.addEventListener('click', () => {
-      this.emulator.load_rom(this.romInput.value);
+    const romLoader = new RomLoader(rom => {
+      this.emulator.load_rom(rom);
       this.cpuView.update();
       this.screenView.update();
       this.startBtn.disabled = false;
       stepBtn.disabled = false;
     });
-    controlsEl.append(loadBtn);
+    controlsEl.append(romLoader.el);
 
     diagsEl.append(controlsEl);
 
