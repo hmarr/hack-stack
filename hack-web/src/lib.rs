@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub struct HackEmulator {
     emu: emulator::Emulator,
+    pixel_buffer: Vec<u8>,
 }
 
 #[wasm_bindgen]
@@ -23,6 +24,7 @@ impl HackEmulator {
         let rom = vec![];
         Self {
             emu: emulator::Emulator::new(rom),
+            pixel_buffer: vec![0u8; 512 * 256 * 4],
         }
     }
 
@@ -60,25 +62,26 @@ impl HackEmulator {
 
     #[wasm_bindgen(getter)]
     pub fn memory(&self) -> js_sys::Uint16Array {
-        // Unsafe but appears to be a bit faster than using js_sys::Uint16Array::from
+        // Unsafe, but avoids copying the array, so it's faster than using js_sys::Uint16Array::from
         unsafe { js_sys::Uint16Array::view(self.emu.memory()) }
     }
 
-    // The JS implementation of this runs much faster
-    // #[wasm_bindgen]
-    // pub fn screen_image_data(&self) -> js_sys::Uint8ClampedArray {
-    //     let mut data = Vec::<u8>::with_capacity(512 * 768 * 4);
-    //     for (i, word) in self.emu.memory()[0..0x6000].iter().enumerate() {
-    //         for bit_index in 0..16 {
-    //             let pixel_index = ((i * 16 + bit_index) * 4) as usize;
-    //             data.push(if (word >> bit_index) & 1 == 0 { 255 } else { 0 });
-    //             data.push(50);
-    //             data.push(50);
-    //             data.push(255);
-    //         }
-    //     }
-    //     js_sys::Uint8ClampedArray::from(data.as_slice());
-    // }
+    #[wasm_bindgen]
+    pub fn screen_image_data(&mut self) -> js_sys::Uint8ClampedArray {
+        for (i, word) in self.emu.memory()[0x4000..0x6000].iter().enumerate() {
+            for bit_index in 0..16 {
+                let pixel_index = ((i * 16 + bit_index) * 4) as usize;
+                self.pixel_buffer[pixel_index] = 0;
+                self.pixel_buffer[pixel_index + 1] =
+                    if (word >> bit_index) & 1 == 0 { 0 } else { 255 };
+                self.pixel_buffer[pixel_index + 2] = 0;
+                self.pixel_buffer[pixel_index + 3] = 255;
+            }
+        }
+
+        // Unsafe, but avoids copying the array, so it's faster than using js_sys::Uint8ClampedArray::from
+        unsafe { js_sys::Uint8ClampedArray::view(self.pixel_buffer.as_slice()) }
+    }
 }
 
 #[wasm_bindgen(start)]
