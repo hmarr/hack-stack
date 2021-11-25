@@ -1,14 +1,14 @@
 import { HackEmulator } from '../pkg'
 import { CpuView } from './cpu-view'
 import { PerfView } from './perf-view';
-import { ScreenView } from './screen-view'
+import { GLScreenView } from './gl-screen-view'
 import { RomLoader } from './rom-loader';
 
 class App {
   emulator: HackEmulator;
   debugMode: boolean;
   cpuView: CpuView;
-  screenView: ScreenView;
+  screenView: GLScreenView;
   perfView: PerfView;
   running: boolean;
   lastFrameTime: number;
@@ -41,7 +41,7 @@ class App {
 
     const screenEl = document.createElement('div');
     screenEl.style.flex = '1';
-    this.screenView = new ScreenView(this.emulator);
+    this.screenView = new GLScreenView(this.emulator);
     screenEl.append(this.screenView.el);
     appEl.append(screenEl);
 
