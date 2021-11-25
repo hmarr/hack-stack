@@ -4,7 +4,8 @@ use crate::common::{SourceFile, SpanError};
 pub struct Codegen<'a> {
     source_file: &'a SourceFile,
     buf: String,
-    static_prefix: String,
+    current_module: String,
+    current_function: Option<&'a str>,
     next_label_index: usize,
     emitted_return_def: bool,
 }
@@ -25,13 +26,14 @@ impl<'a> Codegen<'a> {
         Self {
             source_file,
             buf: String::new(),
-            static_prefix: source_file.name.replace(".vm", "").replace("/", ":"),
+            current_module: source_file.name.replace(".vm", "").replace("/", ":"),
+            current_function: None,
             next_label_index: 0,
             emitted_return_def: false,
         }
     }
 
-    pub fn generate(&mut self, ast: &[ast::Instruction<'a>]) -> Result<&str, Vec<SpanError>> {
+    pub fn generate(&mut self, ast: &'a [ast::Instruction<'a>]) -> Result<&str, Vec<SpanError>> {
         let mut errors = vec![];
         for instruction in ast {
             // Emit a comment showing the VM instruction to make the assembly easier to read
@@ -95,7 +97,7 @@ impl<'a> Codegen<'a> {
                 self.pushd();
             }
             ast::Segment::Static => {
-                self.set_a(&format!("{}.{}", self.static_prefix, inst.offset));
+                self.set_a(&format!("{}.{}", self.current_module, inst.offset));
                 self.emit("D=M");
                 self.pushd();
             }
@@ -139,7 +141,7 @@ impl<'a> Codegen<'a> {
             }
             ast::Segment::Static => {
                 self.popd(PopOp::Assign);
-                self.set_a(&format!("{}.{}", self.static_prefix, inst.offset));
+                self.set_a(&format!("{}.{}", self.current_module, inst.offset));
                 self.emit("M=D");
             }
             ast::Segment::This => {
@@ -192,7 +194,11 @@ impl<'a> Codegen<'a> {
         self.emit("M=-1");
 
         // Generate unique lable to jump to the end
-        let end_label = format!("{}$cmp_end.{}", self.static_prefix, self.next_label_index);
+        let end_label = format!(
+            "{}$cmp_end.{}",
+            self.scope_identifier(),
+            self.next_label_index
+        );
         self.next_label_index += 1;
         self.set_a(&end_label);
 
@@ -226,7 +232,7 @@ impl<'a> Codegen<'a> {
     }
 
     fn goto(&mut self, inst: &ast::GotoInstruction) -> Result<(), String> {
-        self.set_a(&format!("{}${}", self.static_prefix, inst.label));
+        self.set_a(&format!("{}${}", self.scope_identifier(), inst.label));
         self.emit("0;JMP");
         Ok(())
     }
@@ -234,17 +240,19 @@ impl<'a> Codegen<'a> {
     fn if_goto(&mut self, inst: &ast::IfGotoInstruction) -> Result<(), String> {
         self.dec_deref_sp();
         self.emit("D=M");
-        self.set_a(&format!("{}${}", self.static_prefix, inst.label));
+        self.set_a(&format!("{}${}", self.scope_identifier(), inst.label));
         self.emit("D;JNE");
         Ok(())
     }
 
     fn label(&mut self, inst: &ast::LabelInstruction) -> Result<(), String> {
-        self.emit(&format!("({}${})", self.static_prefix, inst.label));
+        self.emit(&format!("({}${})", self.scope_identifier(), inst.label));
         Ok(())
     }
 
-    fn function(&mut self, inst: &ast::FunctionInstruction) -> Result<(), String> {
+    fn function(&mut self, inst: &'a ast::FunctionInstruction) -> Result<(), String> {
+        self.current_function = Some(inst.name);
+
         self.emit(&format!("({})", inst.name));
 
         // Initialise each of the locals to zero
@@ -308,10 +316,12 @@ impl<'a> Codegen<'a> {
     }
 
     fn call(&mut self, inst: &ast::CallInstruction) -> Result<(), String> {
-        // Push the return label (File$function$ret.n) to the stack
+        // Push the return label (File.callingFunction$calledFunction$ret.n) to the stack
         let ret = &format!(
             "{}${}$ret.{}",
-            self.static_prefix, inst.function, self.next_label_index
+            self.scope_identifier(),
+            inst.function,
+            self.next_label_index
         );
         self.next_label_index += 1;
         self.set_a(ret);
@@ -415,6 +425,14 @@ impl<'a> Codegen<'a> {
     fn emit(&mut self, s: &str) {
         self.buf.push_str(s);
         self.buf.push('\n');
+    }
+
+    fn scope_identifier(&self) -> &str {
+        if let Some(function) = self.current_function {
+            function
+        } else {
+            &self.current_module
+        }
     }
 }
 
@@ -742,6 +760,7 @@ mod tests {
         let src = "
         function Test.foo 2
         return
+        function Test.bar 0
         call Test.foo 3
         return";
 
@@ -801,8 +820,11 @@ mod tests {
         @$vm.return
         0;JMP
 
+        // function Test.bar 0
+        (Test.bar)
+
         // call Test.foo 3
-        @Test$Test.foo$ret.0
+        @Test.bar$Test.foo$ret.0
         D=A
         @SP
         M=M+1
@@ -843,7 +865,7 @@ mod tests {
         M=D
         @Test.foo
         0;JMP
-        (Test$Test.foo$ret.0)
+        (Test.bar$Test.foo$ret.0)
         
         // return
         @$vm.return
