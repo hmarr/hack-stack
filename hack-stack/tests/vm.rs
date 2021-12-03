@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
-use hack_stack::{asm, common, emulator, vm};
+use hack_stack::{asm, emulator, vm};
+mod fixtures;
 
 #[test]
 fn test_simple_add() {
@@ -286,9 +285,6 @@ fn parse_rom(hack_src: &str) -> Vec<u16> {
     rom
 }
 
-fn load_fixture(name: &str) -> common::SourceFile {
-    let root_dir: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let fixture_dir = root_dir.join("tests").join("fixtures").join("vm");
-    let src = std::fs::read_to_string(fixture_dir.join(name)).unwrap();
-    common::SourceFile::new(src, name.to_owned())
+fn load_fixture(name: &str) -> hack_stack::common::SourceFile {
+    fixtures::load(&["vm", name])
 }

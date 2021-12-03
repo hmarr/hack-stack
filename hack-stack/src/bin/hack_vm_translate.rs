@@ -17,7 +17,7 @@ fn main() {
 fn translate_main() -> Result<(), ()> {
     let args = std::env::args().collect::<Vec<String>>();
     let path_arg = args.get(1).ok_or_else(|| {
-        eprintln!("usage: hack-vm-translate FILE");
+        eprintln!("usage: hack-vm-translate PATH");
     })?;
     let source_path = Path::new(path_arg).canonicalize().map_err(|err| {
         eprintln!("reading path {}: {}", path_arg, err);
