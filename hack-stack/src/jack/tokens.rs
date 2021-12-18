@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::common::Span;
+use crate::common::{Span, Spanned};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Kind<'a> {
@@ -14,9 +14,9 @@ pub enum Kind<'a> {
     Invalid(&'a str),
 }
 
-impl<'a> fmt::Display for Kind<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
+impl<'a> Kind<'a> {
+    pub fn literal(&self) -> &'a str {
+        match self {
             &Kind::Symbol(v) => v,
             &Kind::Keyword(v) => v,
             &Kind::Ident(v) => v,
@@ -25,8 +25,13 @@ impl<'a> fmt::Display for Kind<'a> {
             &Kind::Comment(v) => v,
             &Kind::EOF => "EOF",
             &Kind::Invalid(s) => s,
-        };
-        f.write_str(s)
+        }
+    }
+}
+
+impl<'a> fmt::Display for Kind<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.literal())
     }
 }
 
@@ -48,6 +53,13 @@ impl<'a> Token<'a> {
         Token {
             kind: Kind::Invalid(s),
             span: Span::new(pos, pos + 1),
+        }
+    }
+
+    pub fn to_spanned_str(&self) -> Spanned<&'a str> {
+        Spanned {
+            item: self.kind.literal(),
+            span: self.span,
         }
     }
 }

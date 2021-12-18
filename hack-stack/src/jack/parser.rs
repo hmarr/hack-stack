@@ -1,93 +1,9 @@
-use std::fmt::{self, Debug};
-
+use super::ast::*;
 use super::tokenizer::Tokenizer;
 use super::tokens::{Kind, Token};
-use crate::common::{Span, SpanError};
-
-#[derive(Debug, PartialEq)]
-pub enum Element<'a> {
-    Node(Node<'a>),
-    Token(Token<'a>),
-}
-
-impl<'a> From<Token<'a>> for Element<'a> {
-    fn from(token: Token<'a>) -> Self {
-        Element::Token(token)
-    }
-}
-
-impl<'a> From<Node<'a>> for Element<'a> {
-    fn from(node: Node<'a>) -> Self {
-        Element::Node(node)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum NodeKind {
-    Class,
-    ClassVarDec,
-    SubroutineDec,
-    ParameterList,
-    SubroutineBody,
-    VarDec,
-    Statements,
-    LetStatement,
-    IfStatement,
-    WhileStatement,
-    DoStatement,
-    ReturnStatement,
-    Expression,
-    Term,
-    ExpressionList,
-}
-
-impl fmt::Display for NodeKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NodeKind::Class => write!(f, "class"),
-            NodeKind::ClassVarDec => write!(f, "classVarDec"),
-            NodeKind::SubroutineDec => write!(f, "subroutineDec"),
-            NodeKind::ParameterList => write!(f, "parameterList"),
-            NodeKind::SubroutineBody => write!(f, "subroutineBody"),
-            NodeKind::VarDec => write!(f, "varDec"),
-            NodeKind::Statements => write!(f, "statements"),
-            NodeKind::LetStatement => write!(f, "letStatement"),
-            NodeKind::Expression => write!(f, "expression"),
-            NodeKind::Term => write!(f, "term"),
-            NodeKind::ExpressionList => write!(f, "expressionList"),
-            NodeKind::IfStatement => write!(f, "ifStatement"),
-            NodeKind::WhileStatement => write!(f, "whileStatement"),
-            NodeKind::DoStatement => write!(f, "doStatement"),
-            NodeKind::ReturnStatement => write!(f, "returnStatement"),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Node<'a> {
-    pub kind: NodeKind,
-    pub children: Vec<Element<'a>>,
-}
-
-impl<'a> Node<'a> {
-    pub fn new(kind: NodeKind) -> Node<'a> {
-        Node {
-            kind,
-            children: vec![],
-        }
-    }
-
-    pub fn add_token(&mut self, token: Token<'a>) {
-        self.children.push(token.into());
-    }
-
-    pub fn add_node(&mut self, node: Node<'a>) {
-        self.children.push(node.into());
-    }
-}
+use crate::common::{Span, SpanError, Spanned};
 
 type ParseResult<T> = Result<T, SpanError>;
-type NodeResult<'a> = ParseResult<Node<'a>>;
 
 pub struct Parser<'a> {
     tokenizer: Tokenizer<'a>,
@@ -110,7 +26,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Element<'a>, SpanError> {
+    pub fn parse(&mut self) -> ParseResult<Class<'a>> {
         self.parse_class().and_then(|el| {
             if self.token.kind == Kind::EOF {
                 Ok(el)
@@ -120,290 +36,357 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_class(&mut self) -> Result<Element<'a>, SpanError> {
-        let mut node = Node::new(NodeKind::Class);
-        node.add_token(self.expect_keyword(&["class"])?);
-        node.add_token(self.expect_ident()?);
-        node.add_token(self.expect_symbol("{")?);
+    fn parse_class(&mut self) -> ParseResult<Class<'a>> {
+        self.expect_keyword(&["class"])?;
+        let name = self.expect_ident()?;
+        self.expect_symbol("{")?;
 
+        let mut var_decs: Vec<ClassVarDec<'a>> = Vec::new();
+        let mut subroutine_decs: Vec<SubroutineDec<'a>> = Vec::new();
         loop {
             match self.token.kind {
-                Kind::Keyword(t @ ("field" | "static")) => node.add_node(self.parse_var_dec(t)?),
+                Kind::Keyword("field" | "static") => var_decs.push(self.parse_class_var_dec()?),
                 Kind::Keyword("function" | "method" | "constructor") => {
-                    node.add_node(self.parse_subroutine_dec()?)
+                    subroutine_decs.push(self.parse_subroutine_dec()?);
                 }
                 _ => break,
             }
         }
 
-        node.add_token(self.expect_symbol("}")?);
+        self.expect_symbol("}")?;
 
-        Ok(Element::Node(node))
+        Ok(Class {
+            name,
+            subroutine_decs,
+            var_decs,
+        })
     }
 
-    fn parse_var_dec(&mut self, var_type: &str) -> NodeResult<'a> {
-        let mut node = Node::new(match var_type {
-            "var" => NodeKind::VarDec,
-            "field" | "static" => NodeKind::ClassVarDec,
-            _ => unreachable!(),
-        });
-        node.add_token(self.expect_keyword(&[var_type])?);
-        node.add_token(self.expect_type_name()?);
-        node.add_token(self.expect_ident()?);
+    fn parse_class_var_dec(&mut self) -> ParseResult<ClassVarDec<'a>> {
+        let kind = match self.token.kind {
+            Kind::Keyword("field") => ClassVarKind::Field,
+            Kind::Keyword("static") => ClassVarKind::Static,
+            _ => return Err(self.unexpected_token_error("`field' or `static'")),
+        };
+
+        Ok(ClassVarDec {
+            kind,
+            var_dec: self.parse_var_dec(&["field", "static"])?,
+        })
+    }
+
+    fn parse_subroutine_dec(&mut self) -> ParseResult<SubroutineDec<'a>> {
+        let kind = self
+            .expect_keyword(&["function", "method", "constructor"])?
+            .map(|&kind| match kind {
+                "constructor" => SubroutineKind::Constructor,
+                "function" => SubroutineKind::Function,
+                "method" => SubroutineKind::Method,
+                _ => unreachable!(),
+            });
+
+        let return_type = self.expect_type_name()?;
+        let name = self.expect_ident()?;
+        self.expect_symbol("(")?;
+        let params = self.parse_parameter_list()?;
+        self.expect_symbol(")")?;
+
+        self.expect_symbol("{")?;
+        let statements = self.parse_statements()?;
+        self.expect_symbol("}")?;
+
+        Ok(SubroutineDec {
+            kind,
+            name,
+            params,
+            return_type,
+            statements,
+        })
+    }
+
+    fn parse_parameter_list(&mut self) -> ParseResult<Vec<Param<'a>>> {
+        let mut params: Vec<Param<'a>> = Vec::new();
+
+        while !matches!(self.token.kind, Kind::Symbol(")")) {
+            let ty = self.expect_type_name()?;
+            let name = self.expect_ident()?;
+            params.push(Param { ty, name });
+
+            if matches!(self.token.kind, Kind::Symbol(",")) {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        Ok(params)
+    }
+
+    fn parse_statements(&mut self) -> ParseResult<Vec<Stmt<'a>>> {
+        let mut stmts = Vec::new();
+
+        loop {
+            match self.token.kind {
+                Kind::Keyword("var") => stmts.push(Stmt::Var(self.parse_var_dec(&["var"])?)),
+                Kind::Keyword("let") => stmts.push(Stmt::Let(self.parse_let_statement()?)),
+                Kind::Keyword("if") => stmts.push(Stmt::If(self.parse_if_statement()?)),
+                Kind::Keyword("while") => stmts.push(Stmt::While(self.parse_while_statement()?)),
+                Kind::Keyword("do") => stmts.push(Stmt::Do(self.parse_do_statement()?)),
+                Kind::Keyword("return") => stmts.push(Stmt::Return(self.parse_return_statement()?)),
+                _ => break,
+            }
+        }
+
+        Ok(stmts)
+    }
+
+    fn parse_var_dec(&mut self, var_specifiers: &[&str]) -> ParseResult<VarDec<'a>> {
+        self.expect_keyword(var_specifiers)?;
+
+        let ty = self.expect_type_name()?;
+
+        let mut names = vec![self.expect_ident()?];
         while matches!(self.token.kind, Kind::Symbol(",")) {
-            node.add_token(self.token);
             self.advance();
-            node.add_token(self.expect_ident()?);
+            names.push(self.expect_ident()?);
         }
-        node.add_token(self.expect_symbol(";")?);
 
-        Ok(node)
+        self.expect_symbol(";")?;
+
+        Ok(VarDec { ty, names })
     }
 
-    fn parse_subroutine_dec(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::SubroutineDec);
-        node.add_token(self.expect_keyword(&["function", "method", "constructor"])?);
-        node.add_token(self.expect_type_name()?);
-        node.add_token(self.expect_ident()?);
-        node.add_token(self.expect_symbol("(")?);
-        node.add_node(self.parse_parameter_list()?);
-        node.add_token(self.expect_symbol(")")?);
+    fn parse_let_statement(&mut self) -> ParseResult<LetStmt<'a>> {
+        self.expect_keyword(&["let"])?;
 
-        node.add_node(self.parse_subroutine_body()?);
+        let assignee = if matches!(self.peek().kind, Kind::Symbol("[")) {
+            Assignee::Index(self.parse_index()?)
+        } else {
+            Assignee::Name(self.expect_ident()?)
+        };
 
-        Ok(node)
+        self.expect_symbol("=")?;
+
+        let expr = self.parse_expression(0)?;
+
+        self.expect_symbol(";")?;
+
+        Ok(LetStmt { assignee, expr })
     }
 
-    fn parse_parameter_list(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::ParameterList);
+    fn parse_if_statement(&mut self) -> ParseResult<IfStmt<'a>> {
+        self.expect_keyword(&["if"])?;
+        self.expect_symbol("(")?;
+        let cond = self.parse_expression(0)?;
+        self.expect_symbol(")")?;
 
-        while !matches!(self.token.kind, Kind::Symbol(")")) {
-            node.add_token(self.expect_type_name()?);
-            node.add_token(self.expect_ident()?);
-            if matches!(self.token.kind, Kind::Symbol(",")) {
-                node.add_token(self.token);
+        self.expect_symbol("{")?;
+        let if_arm = self.parse_statements()?;
+        self.expect_symbol("}")?;
+
+        let else_arm = match self.token.kind {
+            Kind::Keyword("else") => {
                 self.advance();
-            } else {
-                break;
+                self.expect_symbol("{")?;
+                let stmts = self.parse_statements()?;
+                self.expect_symbol("}")?;
+                stmts
             }
-        }
+            _ => vec![],
+        };
 
-        Ok(node)
+        Ok(IfStmt {
+            cond,
+            if_arm,
+            else_arm,
+        })
     }
 
-    fn parse_subroutine_body(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::SubroutineBody);
+    fn parse_while_statement(&mut self) -> ParseResult<WhileStmt<'a>> {
+        self.expect_keyword(&["while"])?;
+        self.expect_symbol("(")?;
+        let cond = self.parse_expression(0)?;
+        self.expect_symbol(")")?;
 
-        node.add_token(self.expect_symbol("{")?);
+        self.expect_symbol("{")?;
+        let body = self.parse_statements()?;
+        self.expect_symbol("}")?;
 
-        while matches!(self.token.kind, Kind::Keyword("var")) {
-            node.add_node(self.parse_var_dec("var")?);
-        }
-
-        node.add_node(self.parse_statements()?);
-
-        node.add_token(self.expect_symbol("}")?);
-
-        Ok(node)
+        Ok(WhileStmt { cond, body })
     }
 
-    fn parse_statements(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::Statements);
+    fn parse_do_statement(&mut self) -> ParseResult<SubroutineCall<'a>> {
+        self.expect_keyword(&["do"])?;
+        let call = self.parse_subroutine_call()?;
+        self.expect_symbol(";")?;
 
-        loop {
-            match self.token.kind {
-                Kind::Keyword("let") => node.add_node(self.parse_let_statement()?),
-                Kind::Keyword("if") => node.add_node(self.parse_if_statement()?),
-                Kind::Keyword("while") => node.add_node(self.parse_while_statement()?),
-                Kind::Keyword("do") => node.add_node(self.parse_do_statement()?),
-                Kind::Keyword("return") => node.add_node(self.parse_return_statement()?),
-                _ => break,
-            }
-        }
-
-        Ok(node)
+        Ok(call)
     }
 
-    fn parse_let_statement(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::LetStatement);
-        node.add_token(self.expect_keyword(&["let"])?);
-        node.add_token(self.expect_ident()?);
+    fn parse_return_statement(&mut self) -> ParseResult<ReturnStmt<'a>> {
+        self.expect_keyword(&["return"])?;
 
-        // Handle array index assignment syntax
-        if matches!(self.token.kind, Kind::Symbol("[")) {
-            node.add_token(self.expect_symbol("[")?);
-            node.add_node(self.parse_expression()?);
-            node.add_token(self.expect_symbol("]")?);
-        }
+        let expr = match self.token.kind {
+            Kind::Symbol(";") => None,
+            _ => Some(self.parse_expression(0)?),
+        };
+        self.expect_symbol(";")?;
 
-        node.add_token(self.expect_symbol("=")?);
-        node.add_node(self.parse_expression()?);
-        node.add_token(self.expect_symbol(";")?);
-
-        Ok(node)
+        Ok(ReturnStmt { expr })
     }
 
-    fn parse_if_statement(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::IfStatement);
-
-        node.add_token(self.expect_keyword(&["if"])?);
-        node.add_token(self.expect_symbol("(")?);
-        node.add_node(self.parse_expression()?);
-        node.add_token(self.expect_symbol(")")?);
-        node.add_token(self.expect_symbol("{")?);
-        node.add_node(self.parse_statements()?);
-        node.add_token(self.expect_symbol("}")?);
-
-        if matches!(self.token.kind, Kind::Keyword("else")) {
-            node.add_token(self.expect_keyword(&["else"])?);
-            node.add_token(self.expect_symbol("{")?);
-            node.add_node(self.parse_statements()?);
-            node.add_token(self.expect_symbol("}")?);
-        }
-
-        Ok(node)
-    }
-
-    fn parse_while_statement(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::WhileStatement);
-
-        node.add_token(self.expect_keyword(&["while"])?);
-        node.add_token(self.expect_symbol("(")?);
-        node.add_node(self.parse_expression()?);
-        node.add_token(self.expect_symbol(")")?);
-        node.add_token(self.expect_symbol("{")?);
-        node.add_node(self.parse_statements()?);
-        node.add_token(self.expect_symbol("}")?);
-
-        Ok(node)
-    }
-
-    fn parse_do_statement(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::DoStatement);
-
-        node.add_token(self.expect_keyword(&["do"])?);
-        self.parse_subroutine_call(&mut node)?;
-        node.add_token(self.expect_symbol(";")?);
-
-        Ok(node)
-    }
-
-    fn parse_return_statement(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::ReturnStatement);
-        node.add_token(self.expect_keyword(&["return"])?);
-
-        if !matches!(self.token.kind, Kind::Symbol(";")) {
-            node.add_node(self.parse_expression()?);
-        }
-        node.add_token(self.expect_symbol(";")?);
-
-        Ok(node)
-    }
-
-    fn parse_expression(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::Expression);
-
-        node.add_node(self.parse_term()?);
-
-        loop {
-            match self.token.kind {
-                Kind::Symbol("+" | "-" | "*" | "/" | "&" | "|" | "<" | ">" | "=") => {
-                    node.add_token(self.token);
-                    self.advance();
-
-                    node.add_node(self.parse_term()?);
-                }
-                _ => break,
-            }
-        }
-
-        Ok(node)
-    }
-
-    fn parse_term(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::Term);
-
-        match self.token.kind {
-            // integerConstant
-            Kind::IntConst(_)
-            // stringConstant
-            | Kind::StrConst(_)
-            // keywordConstant
-            | Kind::Keyword("true" | "false" | "null" | "this") => {
-                node.add_token(self.token);
-                self.advance();
-            }
-            // varName
-            // varName '[' expression ']'
-            // subroutineCall
-            Kind::Ident(_) => {
-                match self.peek().kind {
-                    Kind::Symbol("[") => { 
-                        node.add_token(self.expect_ident()?);
-                        node.add_token(self.expect_symbol("[")?);
-                        node.add_node(self.parse_expression()?);
-                        node.add_token(self.expect_symbol("]")?);
-                    }
-                    Kind::Symbol("(" | ".") => {
-                        self.parse_subroutine_call(&mut node)?;
-                    }
-                    _ => {
-                        node.add_token(self.expect_ident()?);
-                    }
-                }
-            }
-            // '(' expression ')'
-            Kind::Symbol("(") => {
-                node.add_token(self.expect_symbol("(")?);
-                node.add_node(self.parse_expression()?);
-                node.add_token(self.expect_symbol(")")?);
-            }
-            // unaryOp term
-            Kind::Symbol("-" | "~") => {
-                node.add_token(self.token);
-                self.advance();
-
-                node.add_node(self.parse_term()?);
-            }
+    fn parse_expression(&mut self, min_precedence: usize) -> ParseResult<Spanned<Box<Expr<'a>>>> {
+        let span_start = self.token.span.start;
+        let expr = match self.token.kind {
+            Kind::IntConst(_) | Kind::StrConst(_) => self.parse_lit_expr()?,
+            Kind::Keyword("true" | "false" | "null") => self.parse_lit_expr()?,
+            Kind::Keyword("this") | Kind::Ident(_) => self.parse_name_expr()?,
+            Kind::Symbol("-" | "~") => self.parse_unary_expr()?,
+            Kind::Symbol("(") => self.parse_grouped_expr()?,
             _ => return Err(self.unexpected_token_error("term")),
+        };
+        let expr_span = Span::new(span_start, self.prev_token.span.end);
+        let mut spanned_expr = Spanned {
+            item: Box::new(expr),
+            span: expr_span,
+        };
+
+        loop {
+            let bin_op_kind = match self.token.kind {
+                Kind::Symbol("+") => BinOpKind::Add,
+                Kind::Symbol("-") => BinOpKind::Sub,
+                Kind::Symbol("*") => BinOpKind::Mul,
+                Kind::Symbol("/") => BinOpKind::Div,
+                Kind::Symbol("&") => BinOpKind::And,
+                Kind::Symbol("|") => BinOpKind::Or,
+                Kind::Symbol("<") => BinOpKind::Lt,
+                Kind::Symbol(">") => BinOpKind::Gt,
+                Kind::Symbol("=") => BinOpKind::Eq,
+                _ => return Ok(spanned_expr),
+            };
+
+            if bin_op_kind.precedence() < min_precedence {
+                break;
+            }
+
+            let op_span = self.token.span;
+            self.advance();
+
+            let rhs = self.parse_expression(bin_op_kind.precedence())?;
+            let span_end = rhs.span.end;
+
+            spanned_expr = Spanned {
+                item: Box::new(Expr::BinOp(BinOp {
+                    lhs: spanned_expr,
+                    op: Spanned {
+                        item: bin_op_kind,
+                        span: op_span,
+                    },
+                    rhs,
+                })),
+                span: Span::new(expr_span.start, span_end),
+            };
         }
 
-        Ok(node)
+        Ok(spanned_expr)
     }
 
-    fn parse_subroutine_call(&mut self, parent: &mut Node<'a>) -> ParseResult<()> {
-        // Usually we'd allocate a new node in a method like this, but there's
-        // no `subroutineCall` node type in the parse tree spec, but we do want
-        // to reuse this logic (across terms and do statements), so we add the
-        // elements directly to a borrowed parent node.
-        parent.add_token(self.expect_ident()?);
-        if matches!(self.token.kind, Kind::Symbol(".")) {
-            parent.add_token(self.expect_symbol(".")?);
-            parent.add_token(self.expect_ident()?);
+    fn parse_lit_expr(&mut self) -> ParseResult<Expr<'a>> {
+        let expr = match self.token.kind {
+            Kind::IntConst(_) => Expr::IntLit(self.token.to_spanned_str()),
+            Kind::StrConst(_) => Expr::StrLit(self.token.to_spanned_str()),
+            Kind::Keyword("true" | "false") => Expr::BoolLit(self.token.to_spanned_str()),
+            Kind::Keyword("null") => Expr::NullLit(self.token.to_spanned_str()),
+            _ => return Err(self.unexpected_token_error("literal")),
+        };
+
+        self.advance();
+        Ok(expr)
+    }
+
+    fn parse_unary_expr(&mut self) -> ParseResult<Expr<'a>> {
+        let op_kind = match self.token.kind.literal() {
+            "-" => UnaryOpKind::Neg,
+            "~" => UnaryOpKind::Not,
+            _ => return Err(self.unexpected_token_error("unary operator")),
+        };
+        self.advance();
+
+        let op_precedence = op_kind.precedence();
+        Ok(Expr::UnaryOp(UnaryOp {
+            op: Spanned {
+                item: op_kind,
+                span: self.prev_token.span,
+            },
+            expr: self.parse_expression(op_precedence)?,
+        }))
+    }
+
+    fn parse_name_expr(&mut self) -> ParseResult<Expr<'a>> {
+        match self.peek().kind {
+            Kind::Symbol("[") => Ok(Expr::Index(self.parse_index()?)),
+            Kind::Symbol("(" | ".") => Ok(Expr::SubroutineCall(self.parse_subroutine_call()?)),
+            _ => {
+                self.advance();
+                Ok(Expr::Ident(self.prev_token.to_spanned_str()))
+            }
         }
-
-        parent.add_token(self.expect_symbol("(")?);
-        parent.add_node(self.parse_expression_list()?);
-        parent.add_token(self.expect_symbol(")")?);
-
-        Ok(())
     }
 
-    fn parse_expression_list(&mut self) -> NodeResult<'a> {
-        let mut node = Node::new(NodeKind::ExpressionList);
+    fn parse_subroutine_call(&mut self) -> ParseResult<SubroutineCall<'a>> {
+        let (class, subroutine) = match self.peek().kind {
+            Kind::Symbol("(") => {
+                self.advance();
+                (None, self.prev_token.to_spanned_str())
+            }
+            Kind::Symbol(".") => {
+                let class = self.token;
+                self.advance(); // class
+                self.advance(); // .
+                let subroutine = self.token;
+                self.advance(); // subroutine
+                (Some(class.to_spanned_str()), subroutine.to_spanned_str())
+            }
+            _ => return Err(self.unexpected_token_error("subroutine call")),
+        };
 
+        self.expect_symbol("(")?;
+        let mut args: Vec<Spanned<Box<Expr<'a>>>> = Vec::new();
         while !matches!(self.token.kind, Kind::Symbol(")")) {
-            node.add_node(self.parse_expression()?);
+            args.push(self.parse_expression(0)?);
 
             if matches!(self.token.kind, Kind::Symbol(",")) {
-                node.add_token(self.token);
                 self.advance();
             } else {
                 break;
             }
         }
+        self.expect_symbol(")")?;
 
-        Ok(node)
+        Ok(SubroutineCall {
+            class,
+            subroutine,
+            args,
+        })
+    }
+
+    fn parse_index(&mut self) -> ParseResult<Index<'a>> {
+        let array_name = self.token.to_spanned_str();
+        self.advance();
+
+        self.expect_symbol("[")?;
+        let index = self.parse_expression(0)?;
+        self.expect_symbol("]")?;
+
+        Ok(Index { array_name, index })
+    }
+
+    fn parse_grouped_expr(&mut self) -> ParseResult<Expr<'a>> {
+        self.expect_symbol("(")?;
+        let expr = self.parse_expression(0)?;
+        self.expect_symbol(")")?;
+
+        Ok(*expr.item)
     }
 
     fn advance(&mut self) -> Token {
@@ -438,50 +421,54 @@ impl<'a> Parser<'a> {
         token
     }
 
-    fn expect_type_name(&mut self) -> ParseResult<Token<'a>> {
+    fn expect_type_name(&mut self) -> ParseResult<Spanned<&'a str>> {
         match self.token.kind {
             Kind::Keyword("void" | "int" | "char" | "boolean") | Kind::Ident(_) => {
+                let tok = self.token;
                 self.advance();
-                Ok(self.prev_token)
+                Ok(Spanned {
+                    item: tok.kind.literal(),
+                    span: tok.span,
+                })
             }
             _ => Err(self.unexpected_token_error("type")),
         }
     }
 
-    fn expect_keyword(&mut self, allowed_values: &[&str]) -> ParseResult<Token<'a>> {
+    fn expect_keyword(&mut self, allowed_values: &[&str]) -> ParseResult<Spanned<&'a str>> {
         match self.token {
             Token {
                 kind: Kind::Keyword(lit),
-                ..
+                span,
             } if allowed_values.contains(&lit) => {
                 self.advance();
-                Ok(self.prev_token)
+                Ok(Spanned { item: lit, span })
             }
             _ => Err(self.unexpected_token_error(&format!("keyword {:?}", allowed_values))),
         }
     }
 
-    fn expect_symbol(&mut self, lit: &str) -> ParseResult<Token<'a>> {
+    fn expect_symbol(&mut self, sym_lit: &str) -> ParseResult<Spanned<&'a str>> {
         match self.token {
             Token {
-                kind: Kind::Symbol(sym_lit),
-                ..
+                kind: Kind::Symbol(lit),
+                span,
             } if sym_lit == lit => {
                 self.advance();
-                Ok(self.prev_token)
+                Ok(Spanned { item: lit, span })
             }
-            _ => Err(self.unexpected_token_error(&format!("symbol {}", lit))),
+            _ => Err(self.unexpected_token_error(&format!("symbol {}", sym_lit))),
         }
     }
 
-    fn expect_ident(&mut self) -> ParseResult<Token<'a>> {
+    fn expect_ident(&mut self) -> ParseResult<Spanned<&'a str>> {
         match self.token {
             Token {
-                kind: Kind::Ident(_),
-                ..
+                kind: Kind::Ident(lit),
+                span,
             } => {
                 self.advance();
-                Ok(self.prev_token)
+                Ok(Spanned { item: lit, span })
             }
             _ => Err(self.unexpected_token_error(&format!("identifier"))),
         }
@@ -502,38 +489,23 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::jack::debugxml;
+    use crate::common::Spanned;
 
     use super::*;
 
-    fn parse(src: &str) -> Element {
+    fn parse(src: &str) -> Class {
         Parser::new(Tokenizer::new(src)).parse().unwrap()
-    }
-
-    fn parse_tree_xml(src: &str) -> String {
-        let mut buf = Vec::<u8>::new();
-        debugxml::write_tree(&mut buf, &parse(src), 6);
-        String::from_utf8(buf).unwrap()
     }
 
     #[test]
     fn test_empty_class() {
-        let src = "
-        class Foo {
-        }
-        ";
-        let expected = "
-        <class>
-          <keyword> class </keyword>
-          <identifier> Foo </identifier>
-          <symbol> { </symbol>
-          <symbol> } </symbol>
-        </class>
-        ";
-        assert_eq!(
-            normalize_whitespace(parse_tree_xml(src)),
-            normalize_whitespace(expected)
-        )
+        let src = "class Foo { }";
+        let expected = Class {
+            name: Spanned::void("Foo"),
+            var_decs: vec![],
+            subroutine_decs: vec![],
+        };
+        assert_eq!(parse(src), expected)
     }
 
     #[test]
@@ -544,32 +516,27 @@ mod tests {
             static Point p;
         }
         ";
-        let expected = "
-        <class>
-          <keyword> class </keyword>
-          <identifier> Foo </identifier>
-          <symbol> { </symbol>
-          <classVarDec>
-            <keyword> field </keyword>
-            <keyword> int </keyword>
-            <identifier> x </identifier>
-            <symbol> , </symbol>
-            <identifier> y </identifier>
-            <symbol> ; </symbol>
-          </classVarDec>
-          <classVarDec>
-            <keyword> static </keyword>
-            <identifier> Point </identifier>
-            <identifier> p </identifier>
-            <symbol> ; </symbol>
-          </classVarDec>
-          <symbol> } </symbol>
-        </class>
-        ";
-        assert_eq!(
-            normalize_whitespace(parse_tree_xml(src)),
-            normalize_whitespace(expected)
-        )
+        let expected = Class {
+            name: Spanned::void("Foo"),
+            var_decs: vec![
+                ClassVarDec {
+                    kind: ClassVarKind::Field,
+                    var_dec: VarDec {
+                        ty: Spanned::void("int"),
+                        names: vec![Spanned::void("x"), Spanned::void("y")],
+                    },
+                },
+                ClassVarDec {
+                    kind: ClassVarKind::Static,
+                    var_dec: VarDec {
+                        ty: Spanned::void("Point"),
+                        names: vec![Spanned::void("p")],
+                    },
+                },
+            ],
+            subroutine_decs: vec![],
+        };
+        assert_eq!(parse(src), expected);
     }
 
     #[test]
@@ -583,405 +550,260 @@ mod tests {
             }
         }
         ";
-        let expected = "
-        <class>
-          <keyword> class </keyword>
-          <identifier> Foo </identifier>
-          <symbol> { </symbol>
-          <subroutineDec>
-            <keyword> constructor </keyword>
-            <identifier> Foo </identifier>
-            <identifier> new </identifier>
-            <symbol> ( </symbol>
-            <parameterList>
-              <keyword> boolean </keyword>
-              <identifier> x </identifier>
-            </parameterList>
-            <symbol> ) </symbol>
-            <subroutineBody>
-              <symbol> { </symbol>
-              <statements>
-              </statements>
-              <symbol> } </symbol>
-            </subroutineBody>
-          </subroutineDec>
-          <subroutineDec>
-            <keyword> method </keyword>
-            <keyword> void </keyword>
-            <identifier> bar </identifier>
-            <symbol> ( </symbol>
-            <parameterList>
-              <keyword> int </keyword>
-              <identifier> x </identifier>
-              <symbol> , </symbol>
-              <identifier> String </identifier>
-              <identifier> y </identifier>
-            </parameterList>
-            <symbol> ) </symbol>
-            <subroutineBody>
-              <symbol> { </symbol>
-              <statements>
-              </statements>
-              <symbol> } </symbol>
-            </subroutineBody>
-          </subroutineDec>
-          <symbol> } </symbol>
-        </class>
-        ";
-        assert_eq!(
-            normalize_whitespace(parse_tree_xml(src)),
-            normalize_whitespace(expected)
-        )
+
+        let expected = Class {
+            name: Spanned::void("Foo"),
+            var_decs: vec![],
+            subroutine_decs: vec![
+                SubroutineDec {
+                    kind: Spanned::void(SubroutineKind::Constructor),
+                    return_type: Spanned::void("Foo"),
+                    name: Spanned::void("new"),
+                    params: vec![Param {
+                        ty: Spanned::void("boolean"),
+                        name: Spanned::void("x"),
+                    }],
+                    statements: vec![],
+                },
+                SubroutineDec {
+                    kind: Spanned::void(SubroutineKind::Method),
+                    return_type: Spanned::void("void"),
+                    name: Spanned::void("bar"),
+                    params: vec![
+                        Param {
+                            ty: Spanned::void("int"),
+                            name: Spanned::void("x"),
+                        },
+                        Param {
+                            ty: Spanned::void("String"),
+                            name: Spanned::void("y"),
+                        },
+                    ],
+                    statements: vec![],
+                },
+            ],
+        };
+        assert_eq!(parse(src), expected);
     }
 
     #[test]
     fn test_statements() {
-        let src = "
+        let src = r#"
         class Foo {
-            function void bar() {
+            function integer bar() {
                 var int x;
+                var boolean y, z;
                 if (true) {
-                    do Sys.print(\"hi\");
+                    let z = x;
                 } else {
-                    let x[1] = x;
+                    let a[0] = "baz";
                 }
+                do Sys.print("hi");
                 while (false) {
                     return 1;
                 }
                 return;
             }
         }
-        ";
-        let expected = "
-        <class>
-          <keyword> class </keyword>
-          <identifier> Foo </identifier>
-          <symbol> { </symbol>
-          <subroutineDec>
-            <keyword> function </keyword>
-            <keyword> void </keyword>
-            <identifier> bar </identifier>
-            <symbol> ( </symbol>
-            <parameterList>
-            </parameterList>
-            <symbol> ) </symbol>
-            <subroutineBody>
-              <symbol> { </symbol>
-              <varDec>
-                <keyword> var </keyword>
-                <keyword> int </keyword>
-                <identifier> x </identifier>
-                <symbol> ; </symbol>
-              </varDec>
-              <statements>
-                <ifStatement>
-                  <keyword> if </keyword>
-                  <symbol> ( </symbol>
-                  <expression>
-                    <term>
-                      <keyword> true </keyword>
-                    </term>
-                  </expression>
-                  <symbol> ) </symbol>
-                  <symbol> { </symbol>
-                  <statements>
-                    <doStatement>
-                      <keyword> do </keyword>
-                      <identifier> Sys </identifier>
-                      <symbol> . </symbol>
-                      <identifier> print </identifier>
-                      <symbol> ( </symbol>
-                      <expressionList>
-                        <expression>
-                          <term>
-                            <stringConstant> hi </stringConstant>
-                          </term>
-                        </expression>
-                      </expressionList>
-                      <symbol> ) </symbol>
-                      <symbol> ; </symbol>
-                    </doStatement>
-                  </statements>
-                  <symbol> } </symbol>
-                  <keyword> else </keyword>
-                  <symbol> { </symbol>
-                  <statements>
-                    <letStatement>
-                      <keyword> let </keyword>
-                      <identifier> x </identifier>
-                      <symbol> [ </symbol>
-                      <expression>
-                        <term>
-                          <integerConstant> 1 </integerConstant>
-                        </term>
-                      </expression>
-                      <symbol> ] </symbol>
-                      <symbol> = </symbol>
-                      <expression>
-                        <term>
-                          <identifier> x </identifier>
-                        </term>
-                      </expression>
-                      <symbol> ; </symbol>
-                    </letStatement>
-                  </statements>
-                  <symbol> } </symbol>
-                </ifStatement>
-                <whileStatement>
-                  <keyword> while </keyword>
-                  <symbol> ( </symbol>
-                  <expression>
-                    <term>
-                      <keyword> false </keyword>
-                    </term>
-                  </expression>
-                  <symbol> ) </symbol>
-                  <symbol> { </symbol>
-                  <statements>
-                    <returnStatement>
-                      <keyword> return </keyword>
-                      <expression>
-                        <term>
-                          <integerConstant> 1 </integerConstant>
-                        </term>
-                      </expression>
-                      <symbol> ; </symbol>
-                    </returnStatement>
-                  </statements>
-                  <symbol> } </symbol>
-                </whileStatement>
-                <returnStatement>
-                  <keyword> return </keyword>
-                  <symbol> ; </symbol>
-                </returnStatement>
-              </statements>
-              <symbol> } </symbol>
-            </subroutineBody>
-          </subroutineDec>
-          <symbol> } </symbol>
-        </class>
-        ";
-        assert_eq!(
-            normalize_whitespace(parse_tree_xml(src)),
-            normalize_whitespace(expected)
-        )
+        "#;
+        let expected = Class {
+            name: Spanned::void("Foo"),
+            var_decs: vec![],
+            subroutine_decs: vec![SubroutineDec {
+                kind: Spanned::void(SubroutineKind::Function),
+                return_type: Spanned::void("integer"),
+                name: Spanned::void("bar"),
+                params: vec![],
+                statements: vec![
+                    Stmt::Var(VarDec {
+                        ty: Spanned::void("int"),
+                        names: vec![Spanned::void("x")],
+                    }),
+                    Stmt::Var(VarDec {
+                        ty: Spanned::void("boolean"),
+                        names: vec![Spanned::void("y"), Spanned::void("z")],
+                    }),
+                    Stmt::If(IfStmt {
+                        cond: Spanned::void(Box::new(Expr::BoolLit(Spanned::void("true")))),
+                        if_arm: vec![Stmt::Let(LetStmt {
+                            assignee: Assignee::Name(Spanned::void("z")),
+                            expr: Spanned::void(Box::new(Expr::Ident(Spanned::void("x")))),
+                        })],
+                        else_arm: vec![Stmt::Let(LetStmt {
+                            assignee: Assignee::Index(Index {
+                                array_name: Spanned::void("a"),
+                                index: Spanned::void(Box::new(Expr::IntLit(Spanned::void("0")))),
+                            }),
+                            expr: Spanned::void(Box::new(Expr::StrLit(Spanned::void("baz")))),
+                        })],
+                    }),
+                    Stmt::Do(SubroutineCall {
+                        class: Some(Spanned::void("Sys")),
+                        subroutine: Spanned::void("print"),
+                        args: vec![Spanned::void(Box::new(Expr::StrLit(Spanned::void("hi"))))],
+                    }),
+                    Stmt::While(WhileStmt {
+                        cond: Spanned::void(Box::new(Expr::BoolLit(Spanned::void("false")))),
+                        body: vec![Stmt::Return(ReturnStmt {
+                            expr: Some(Spanned::void(Box::new(Expr::IntLit(Spanned::void("1"))))),
+                        })],
+                    }),
+                    Stmt::Return(ReturnStmt { expr: None }),
+                ],
+            }],
+        };
+        assert_eq!(parse(src), expected);
     }
 
     #[test]
     fn test_expressions() {
         let src = "
         class Foo {
-            function void bar() {
-                let x = 1;
-                let x = ~1;
-                let x = \"hello\";
-                let x = true;
-                let x = x;
-                let x = x[1];
-                let x = 1 + 2 & (3 / 4);
-                let x = baz(1);
-                let x = Foo.quux(1, 2);
+            function integer bar() {
+                return 1;
+                return ~1;
+                return \"hello\";
+                return true;
+                return null;
+                return this;
+                return x;
+                return x[1];
+                return baz(1);
+                return Foo.quux(1, false);
             }
         }
         ";
-        let expected = "
-        <class>
-          <keyword> class </keyword>
-          <identifier> Foo </identifier>
-          <symbol> { </symbol>
-          <subroutineDec>
-            <keyword> function </keyword>
-            <keyword> void </keyword>
-            <identifier> bar </identifier>
-            <symbol> ( </symbol>
-            <parameterList>
-            </parameterList>
-            <symbol> ) </symbol>
-            <subroutineBody>
-              <symbol> { </symbol>
-              <statements>
-                <letStatement>
-                  <keyword> let </keyword>
-                  <identifier> x </identifier>
-                  <symbol> = </symbol>
-                  <expression>
-                    <term>
-                      <integerConstant> 1 </integerConstant>
-                    </term>
-                  </expression>
-                  <symbol> ; </symbol>
-                </letStatement>
-                <letStatement>
-                  <keyword> let </keyword>
-                  <identifier> x </identifier>
-                  <symbol> = </symbol>
-                  <expression>
-                    <term>
-                      <symbol> ~ </symbol>
-                      <term>
-                        <integerConstant> 1 </integerConstant>
-                      </term>
-                    </term>
-                  </expression>
-                  <symbol> ; </symbol>
-                </letStatement>
-                <letStatement>
-                  <keyword> let </keyword>
-                  <identifier> x </identifier>
-                  <symbol> = </symbol>
-                  <expression>
-                    <term>
-                      <stringConstant> hello </stringConstant>
-                    </term>
-                  </expression>
-                  <symbol> ; </symbol>
-                </letStatement>
-                <letStatement>
-                  <keyword> let </keyword>
-                  <identifier> x </identifier>
-                  <symbol> = </symbol>
-                  <expression>
-                    <term>
-                      <keyword> true </keyword>
-                    </term>
-                  </expression>
-                  <symbol> ; </symbol>
-                </letStatement>
-                <letStatement>
-                  <keyword> let </keyword>
-                  <identifier> x </identifier>
-                  <symbol> = </symbol>
-                  <expression>
-                    <term>
-                      <identifier> x </identifier>
-                    </term>
-                  </expression>
-                  <symbol> ; </symbol>
-                </letStatement>
-                <letStatement>
-                  <keyword> let </keyword>
-                  <identifier> x </identifier>
-                  <symbol> = </symbol>
-                  <expression>
-                    <term>
-                      <identifier> x </identifier>
-                      <symbol> [ </symbol>
-                      <expression>
-                        <term>
-                          <integerConstant> 1 </integerConstant>
-                        </term>
-                      </expression>
-                      <symbol> ] </symbol>
-                    </term>
-                  </expression>
-                  <symbol> ; </symbol>
-                </letStatement>
-                <letStatement>
-                  <keyword> let </keyword>
-                  <identifier> x </identifier>
-                  <symbol> = </symbol>
-                  <expression>
-                    <term>
-                      <integerConstant> 1 </integerConstant>
-                    </term>
-                    <symbol> + </symbol>
-                    <term>
-                      <integerConstant> 2 </integerConstant>
-                    </term>
-                    <symbol> &amp; </symbol>
-                    <term>
-                      <symbol> ( </symbol>
-                      <expression>
-                        <term>
-                          <integerConstant> 3 </integerConstant>
-                        </term>
-                        <symbol> / </symbol>
-                        <term>
-                          <integerConstant> 4 </integerConstant>
-                        </term>
-                      </expression>
-                      <symbol> ) </symbol>
-                    </term>
-                  </expression>
-                  <symbol> ; </symbol>
-                </letStatement>
-                <letStatement>
-                  <keyword> let </keyword>
-                  <identifier> x </identifier>
-                  <symbol> = </symbol>
-                  <expression>
-                    <term>
-                      <identifier> baz </identifier>
-                      <symbol> ( </symbol>
-                      <expressionList>
-                        <expression>
-                          <term>
-                            <integerConstant> 1 </integerConstant>
-                          </term>
-                        </expression>
-                      </expressionList>
-                      <symbol> ) </symbol>
-                    </term>
-                  </expression>
-                  <symbol> ; </symbol>
-                </letStatement>
-                <letStatement>
-                  <keyword> let </keyword>
-                  <identifier> x </identifier>
-                  <symbol> = </symbol>
-                  <expression>
-                    <term>
-                      <identifier> Foo </identifier>
-                      <symbol> . </symbol>
-                      <identifier> quux </identifier>
-                      <symbol> ( </symbol>
-                      <expressionList>
-                        <expression>
-                          <term>
-                            <integerConstant> 1 </integerConstant>
-                          </term>
-                        </expression>
-                        <symbol> , </symbol>
-                        <expression>
-                          <term>
-                            <integerConstant> 2 </integerConstant>
-                          </term>
-                        </expression>
-                      </expressionList>
-                      <symbol> ) </symbol>
-                    </term>
-                  </expression>
-                  <symbol> ; </symbol>
-                </letStatement>
-              </statements>
-              <symbol> } </symbol>
-            </subroutineBody>
-          </subroutineDec>
-          <symbol> } </symbol>
-        </class>
-        ";
-
-        assert_eq!(
-            normalize_whitespace(parse_tree_xml(src)),
-            normalize_whitespace(expected)
-        )
+        let expected = Class {
+            name: Spanned::void("Foo"),
+            var_decs: vec![],
+            subroutine_decs: vec![SubroutineDec {
+                kind: Spanned::void(SubroutineKind::Function),
+                return_type: Spanned::void("integer"),
+                name: Spanned::void("bar"),
+                params: vec![],
+                statements: vec![
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::IntLit(Spanned::void("1"))))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::UnaryOp(UnaryOp {
+                            op: Spanned::void(UnaryOpKind::Not),
+                            expr: Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
+                        })))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::StrLit(Spanned::void(
+                            "hello",
+                        ))))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::BoolLit(Spanned::void(
+                            "true",
+                        ))))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::NullLit(Spanned::void(
+                            "null",
+                        ))))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::Ident(Spanned::void("this"))))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::Ident(Spanned::void("x"))))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::Index(Index {
+                            array_name: Spanned::void("x"),
+                            index: Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
+                        })))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::SubroutineCall(
+                            SubroutineCall {
+                                class: None,
+                                subroutine: Spanned::void("baz"),
+                                args: vec![Spanned::void(Box::new(Expr::IntLit(Spanned::void(
+                                    "1",
+                                ))))],
+                            },
+                        )))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::SubroutineCall(
+                            SubroutineCall {
+                                class: Some(Spanned::void("Foo")),
+                                subroutine: Spanned::void("quux"),
+                                args: vec![
+                                    Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
+                                    Spanned::void(Box::new(Expr::BoolLit(Spanned::void("false")))),
+                                ],
+                            },
+                        )))),
+                    }),
+                ],
+            }],
+        };
+        assert_eq!(parse(src), expected);
     }
 
-    fn normalize_whitespace<S: AsRef<str>>(s: S) -> String {
-        let lines = s
-            .as_ref()
-            .lines()
-            .filter(|l| l.find(|c: char| !c.is_whitespace()).is_some());
-
-        let min_indent = lines
-            .clone()
-            .map(|l| l.find(|c: char| !c.is_whitespace()).unwrap_or(0))
-            .min()
-            .unwrap_or(0);
-
-        lines
-            .map(|l| l[min_indent..].to_owned())
-            .collect::<Vec<_>>()
-            .join("\n")
+    #[test]
+    fn test_expression_precedence() {
+        let src = "
+        class Foo {
+            function integer bar() {
+                return -1 + 2 & 3 * -4;
+                return -(1 + 2) * 3;
+            }
+        }
+        ";
+        let expected = Class {
+            name: Spanned::void("Foo"),
+            var_decs: vec![],
+            subroutine_decs: vec![SubroutineDec {
+                kind: Spanned::void(SubroutineKind::Function),
+                return_type: Spanned::void("integer"),
+                name: Spanned::void("bar"),
+                params: vec![],
+                statements: vec![
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::BinOp(BinOp {
+                            op: Spanned::void(BinOpKind::Add),
+                            lhs: Spanned::void(Box::new(Expr::UnaryOp(UnaryOp {
+                                op: Spanned::void(UnaryOpKind::Neg),
+                                expr: Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
+                            }))),
+                            rhs: Spanned::void(Box::new(Expr::BinOp(BinOp {
+                                op: Spanned::void(BinOpKind::Mul),
+                                lhs: Spanned::void(Box::new(Expr::BinOp(BinOp {
+                                    op: Spanned::void(BinOpKind::And),
+                                    lhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("2")))),
+                                    rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("3")))),
+                                }))),
+                                rhs: Spanned::void(Box::new(Expr::UnaryOp(UnaryOp {
+                                    op: Spanned::void(UnaryOpKind::Neg),
+                                    expr: Spanned::void(Box::new(Expr::IntLit(Spanned::void("4")))),
+                                }))),
+                            }))),
+                        })))),
+                    }),
+                    Stmt::Return(ReturnStmt {
+                        expr: Some(Spanned::void(Box::new(Expr::BinOp(BinOp {
+                            op: Spanned::void(BinOpKind::Mul),
+                            lhs: Spanned::void(Box::new(Expr::UnaryOp(UnaryOp {
+                                op: Spanned::void(UnaryOpKind::Neg),
+                                expr: Spanned::void(Box::new(Expr::BinOp(BinOp {
+                                    op: Spanned::void(BinOpKind::Add),
+                                    lhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
+                                    rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("2")))),
+                                }))),
+                            }))),
+                            rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("3")))),
+                        })))),
+                    }),
+                ],
+            }],
+        };
+        assert_eq!(parse(src), expected);
     }
 }

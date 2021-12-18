@@ -1,3 +1,4 @@
+pub mod ast;
 pub mod debugxml;
 pub mod parser;
 pub mod tokenizer;
