@@ -16,8 +16,8 @@ name = "hack-emulate"
 path = "src/bin/hack_emulate.rs"
 
 [[bin]]
-name = "jack-analyze"
-path = "src/bin/jack_analyze.rs"
+name = "jack-compile"
+path = "src/bin/jack_compile.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

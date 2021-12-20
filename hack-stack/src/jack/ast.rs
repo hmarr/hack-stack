@@ -89,10 +89,10 @@ pub struct ReturnStmt<'a> {
 
 #[derive(Debug, PartialEq)]
 pub enum Expr<'a> {
-    IntLit(Spanned<&'a str>),
+    IntLit(Spanned<u16>),
     StrLit(Spanned<&'a str>),
-    BoolLit(Spanned<&'a str>),
-    NullLit(Spanned<&'a str>),
+    BoolLit(Spanned<bool>),
+    NullLit(Spanned<()>),
     Ident(Spanned<&'a str>),
     UnaryOp(UnaryOp<'a>),
     BinOp(BinOp<'a>),
@@ -141,6 +141,9 @@ impl BinOpKind {
             Self::Sub => 2,
             Self::Mul => 3,
             Self::Div => 3,
+            // NOTE: in most C-derived languages, bitwise & and | are lower
+            // precedence than other arithmetic operators, so this deviation
+            // might be surprising. But hey, let's keep life interesting!
             Self::And => 4,
             Self::Or => 4,
             Self::Lt => 1,
@@ -159,6 +162,8 @@ pub struct BinOp<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct SubroutineCall<'a> {
+    // TODO: `class` doesn't cover all - it could be another object, it could be
+    // `this`, it could be a class
     pub class: Option<Spanned<&'a str>>,
     pub subroutine: Spanned<&'a str>,
     pub args: Vec<Spanned<Box<Expr<'a>>>>,

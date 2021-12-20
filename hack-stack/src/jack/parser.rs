@@ -272,7 +272,7 @@ impl<'a> Parser<'a> {
             let op_span = self.token.span;
             self.advance();
 
-            let rhs = self.parse_expression(bin_op_kind.precedence())?;
+            let rhs = self.parse_expression(bin_op_kind.precedence() + 1)?;
             let span_end = rhs.span.end;
 
             spanned_expr = Spanned {
@@ -293,10 +293,30 @@ impl<'a> Parser<'a> {
 
     fn parse_lit_expr(&mut self) -> ParseResult<Expr<'a>> {
         let expr = match self.token.kind {
-            Kind::IntConst(_) => Expr::IntLit(self.token.to_spanned_str()),
+            Kind::IntConst(i) => Expr::IntLit(
+                i.parse()
+                    .map(|val| Spanned {
+                        item: val,
+                        span: self.token.span,
+                    })
+                    .map_err(|_| SpanError {
+                        msg: format!("invalid int literal {}", i),
+                        span: self.token.span,
+                    })?,
+            ),
             Kind::StrConst(_) => Expr::StrLit(self.token.to_spanned_str()),
-            Kind::Keyword("true" | "false") => Expr::BoolLit(self.token.to_spanned_str()),
-            Kind::Keyword("null") => Expr::NullLit(self.token.to_spanned_str()),
+            Kind::Keyword("true") => Expr::BoolLit(Spanned {
+                span: self.token.span,
+                item: true,
+            }),
+            Kind::Keyword("false") => Expr::BoolLit(Spanned {
+                span: self.token.span,
+                item: false,
+            }),
+            Kind::Keyword("null") => Expr::NullLit(Spanned {
+                span: self.token.span,
+                item: (),
+            }),
             _ => return Err(self.unexpected_token_error("literal")),
         };
 
@@ -624,7 +644,7 @@ mod tests {
                         names: vec![Spanned::void("y"), Spanned::void("z")],
                     }),
                     Stmt::If(IfStmt {
-                        cond: Spanned::void(Box::new(Expr::BoolLit(Spanned::void("true")))),
+                        cond: Spanned::void(Box::new(Expr::BoolLit(Spanned::void(true)))),
                         if_arm: vec![Stmt::Let(LetStmt {
                             assignee: Assignee::Name(Spanned::void("z")),
                             expr: Spanned::void(Box::new(Expr::Ident(Spanned::void("x")))),
@@ -632,7 +652,7 @@ mod tests {
                         else_arm: vec![Stmt::Let(LetStmt {
                             assignee: Assignee::Index(Index {
                                 array_name: Spanned::void("a"),
-                                index: Spanned::void(Box::new(Expr::IntLit(Spanned::void("0")))),
+                                index: Spanned::void(Box::new(Expr::IntLit(Spanned::void(0)))),
                             }),
                             expr: Spanned::void(Box::new(Expr::StrLit(Spanned::void("baz")))),
                         })],
@@ -643,9 +663,9 @@ mod tests {
                         args: vec![Spanned::void(Box::new(Expr::StrLit(Spanned::void("hi"))))],
                     }),
                     Stmt::While(WhileStmt {
-                        cond: Spanned::void(Box::new(Expr::BoolLit(Spanned::void("false")))),
+                        cond: Spanned::void(Box::new(Expr::BoolLit(Spanned::void(false)))),
                         body: vec![Stmt::Return(ReturnStmt {
-                            expr: Some(Spanned::void(Box::new(Expr::IntLit(Spanned::void("1"))))),
+                            expr: Some(Spanned::void(Box::new(Expr::IntLit(Spanned::void(1))))),
                         })],
                     }),
                     Stmt::Return(ReturnStmt { expr: None }),
@@ -683,12 +703,12 @@ mod tests {
                 params: vec![],
                 statements: vec![
                     Stmt::Return(ReturnStmt {
-                        expr: Some(Spanned::void(Box::new(Expr::IntLit(Spanned::void("1"))))),
+                        expr: Some(Spanned::void(Box::new(Expr::IntLit(Spanned::void(1))))),
                     }),
                     Stmt::Return(ReturnStmt {
                         expr: Some(Spanned::void(Box::new(Expr::UnaryOp(UnaryOp {
                             op: Spanned::void(UnaryOpKind::Not),
-                            expr: Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
+                            expr: Spanned::void(Box::new(Expr::IntLit(Spanned::void(1)))),
                         })))),
                     }),
                     Stmt::Return(ReturnStmt {
@@ -697,14 +717,10 @@ mod tests {
                         ))))),
                     }),
                     Stmt::Return(ReturnStmt {
-                        expr: Some(Spanned::void(Box::new(Expr::BoolLit(Spanned::void(
-                            "true",
-                        ))))),
+                        expr: Some(Spanned::void(Box::new(Expr::BoolLit(Spanned::void(true))))),
                     }),
                     Stmt::Return(ReturnStmt {
-                        expr: Some(Spanned::void(Box::new(Expr::NullLit(Spanned::void(
-                            "null",
-                        ))))),
+                        expr: Some(Spanned::void(Box::new(Expr::NullLit(Spanned::void(()))))),
                     }),
                     Stmt::Return(ReturnStmt {
                         expr: Some(Spanned::void(Box::new(Expr::Ident(Spanned::void("this"))))),
@@ -715,7 +731,7 @@ mod tests {
                     Stmt::Return(ReturnStmt {
                         expr: Some(Spanned::void(Box::new(Expr::Index(Index {
                             array_name: Spanned::void("x"),
-                            index: Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
+                            index: Spanned::void(Box::new(Expr::IntLit(Spanned::void(1)))),
                         })))),
                     }),
                     Stmt::Return(ReturnStmt {
@@ -723,9 +739,7 @@ mod tests {
                             SubroutineCall {
                                 class: None,
                                 subroutine: Spanned::void("baz"),
-                                args: vec![Spanned::void(Box::new(Expr::IntLit(Spanned::void(
-                                    "1",
-                                ))))],
+                                args: vec![Spanned::void(Box::new(Expr::IntLit(Spanned::void(1))))],
                             },
                         )))),
                     }),
@@ -735,8 +749,8 @@ mod tests {
                                 class: Some(Spanned::void("Foo")),
                                 subroutine: Spanned::void("quux"),
                                 args: vec![
-                                    Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
-                                    Spanned::void(Box::new(Expr::BoolLit(Spanned::void("false")))),
+                                    Spanned::void(Box::new(Expr::IntLit(Spanned::void(1)))),
+                                    Spanned::void(Box::new(Expr::BoolLit(Spanned::void(false)))),
                                 ],
                             },
                         )))),
@@ -753,7 +767,7 @@ mod tests {
         class Foo {
             function integer bar() {
                 return -1 + 2 & 3 * -4;
-                return -(1 + 2) * 3;
+                return -(1 + 2 -3) * 4;
             }
         }
         ";
@@ -771,18 +785,18 @@ mod tests {
                             op: Spanned::void(BinOpKind::Add),
                             lhs: Spanned::void(Box::new(Expr::UnaryOp(UnaryOp {
                                 op: Spanned::void(UnaryOpKind::Neg),
-                                expr: Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
+                                expr: Spanned::void(Box::new(Expr::IntLit(Spanned::void(1)))),
                             }))),
                             rhs: Spanned::void(Box::new(Expr::BinOp(BinOp {
                                 op: Spanned::void(BinOpKind::Mul),
                                 lhs: Spanned::void(Box::new(Expr::BinOp(BinOp {
                                     op: Spanned::void(BinOpKind::And),
-                                    lhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("2")))),
-                                    rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("3")))),
+                                    lhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void(2)))),
+                                    rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void(3)))),
                                 }))),
                                 rhs: Spanned::void(Box::new(Expr::UnaryOp(UnaryOp {
                                     op: Spanned::void(UnaryOpKind::Neg),
-                                    expr: Spanned::void(Box::new(Expr::IntLit(Spanned::void("4")))),
+                                    expr: Spanned::void(Box::new(Expr::IntLit(Spanned::void(4)))),
                                 }))),
                             }))),
                         })))),
@@ -793,12 +807,20 @@ mod tests {
                             lhs: Spanned::void(Box::new(Expr::UnaryOp(UnaryOp {
                                 op: Spanned::void(UnaryOpKind::Neg),
                                 expr: Spanned::void(Box::new(Expr::BinOp(BinOp {
-                                    op: Spanned::void(BinOpKind::Add),
-                                    lhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("1")))),
-                                    rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("2")))),
+                                    op: Spanned::void(BinOpKind::Sub),
+                                    lhs: Spanned::void(Box::new(Expr::BinOp(BinOp {
+                                        op: Spanned::void(BinOpKind::Add),
+                                        lhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void(
+                                            1,
+                                        )))),
+                                        rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void(
+                                            2,
+                                        )))),
+                                    }))),
+                                    rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void(3)))),
                                 }))),
                             }))),
-                            rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void("3")))),
+                            rhs: Spanned::void(Box::new(Expr::IntLit(Spanned::void(4)))),
                         })))),
                     }),
                 ],
