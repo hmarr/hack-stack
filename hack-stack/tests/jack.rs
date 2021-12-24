@@ -35,6 +35,37 @@ fn test_locals() {
 }
 
 #[test]
+fn test_statics() {
+    let sys_src = r#"
+    class Sys {
+      function void init() {
+        do Foo.add(1);
+        do Foo.add(2);
+        return Foo.value() = 3;
+      }
+    }
+    "#;
+    let foo_src = r#"
+    class Foo {
+      static int sum;
+      function void add(int x) {
+        let sum = sum + x;
+        return;
+      }
+      function int value() {
+        return sum;
+      }
+    }
+    "#;
+
+    let sys_vm_src = SourceFile::new(compile(sys_src), "Sys.jack".into());
+    let foo_vm_src = SourceFile::new(compile(foo_src), "Foo.jack".into());
+    let ram = eval(&[sys_vm_src, foo_vm_src], 5000);
+    assert_eq!(ram[0], 257);
+    assert_eq!(ram[256], 0xffff);
+}
+
+#[test]
 fn test_while() {
     let src = r#"
     class Sys {
@@ -110,11 +141,54 @@ fn test_function_call() {
 }
 
 #[test]
-fn test_this() {
-    let src = r#"
+fn test_methods_and_fields() {
+    let sys_src = r#"
     class Sys {
       function void init() {
-        var s Sys;
+        var Counter c1, c2;
+        let c1 = Counter.new(1);
+        let c2 = Counter.new(2);
+        do c1.addOne();
+        do c2.addOne();
+        do c1.addOther(c2);
+        return c1.count() = 5;
+      }
+    }
+    "#;
+    let counter_src = r#"
+    class Counter {
+      field int count;
+      constructor Counter new(int initial) {
+        let count = initial;
+        return this;
+      }
+      method void addOne() {
+        let count = count + 1;
+        return;
+      }
+      method void addOther(Counter other) {
+        let count = count + other.count();
+        return;
+      }
+      method int count() {
+        return count;
+      }
+    }
+    "#;
+    let sys_vm_src = SourceFile::new(compile(sys_src), "Sys.jack".into());
+    let counter_vm_src = SourceFile::new(compile(counter_src), "Counter.jack".into());
+
+    let ram = eval(&[sys_vm_src, counter_vm_src, malloc_vm_src()], 5000);
+    assert_eq!(ram[0], 257);
+    assert_eq!(ram[256], 0xffff);
+}
+
+#[test]
+fn test_this() {
+    let prog_src = r#"
+    class Sys {
+      function void init() {
+        var Sys s;
         let s = Sys.new();
         return s = s.self();
       }
@@ -128,15 +202,110 @@ fn test_this() {
       }
     }
     "#;
+    let prog_vm_src = SourceFile::new(compile(prog_src), "Sys.jack".into());
 
-    let ram = compile_and_evaluate(src, 1000);
+    let ram = eval(&[prog_vm_src, malloc_vm_src()], 5000);
     assert_eq!(ram[0], 257);
     assert_eq!(ram[256], 0xffff);
 }
 
+#[test]
+fn test_arrays() {
+    let prog_src = r#"
+    class Sys {
+      function void init() {
+        var Array xs, ys;
+        let xs = Memory.alloc(2);
+        let ys = Memory.alloc(2);
+        let xs[0] = 4;
+        let xs[1] = 5;
+        let ys[0] = xs[1];
+        let ys[1 - 0] = xs[xs[1] - xs[0]];
+        return ys[1] = 5;
+      }
+    }
+    "#;
+    let prog_vm_src = SourceFile::new(compile(prog_src), "Sys.jack".into());
+    let ram = eval(&[prog_vm_src, malloc_vm_src()], 5000);
+    assert_eq!(ram[0], 257);
+    assert_eq!(ram[256], 0xffff);
+}
+
+#[test]
+fn test_strings() {
+    let prog_src = r#"
+    class Sys {
+      function void init() {
+        var String s;
+        let s = "Hello, All!";
+        return s.charAt(7) = 65;
+      }
+    }
+    "#;
+    let string_src = r#"
+    class String {
+      field Array buf, len;
+      constructor String new(int capacity) {
+        let buf = Memory.alloc(capacity);
+        let len = 0;
+        return this;
+      }
+      method String appendChar(char c) {
+        let buf[len] = c;
+        let len = len + 1;
+        return this;
+      }
+      method int charAt(int pos) {
+        return buf[pos];
+      }
+    }
+    "#;
+    let prog_vm_src = SourceFile::new(compile(prog_src), "Sys.jack".into());
+    let string_vm_src = SourceFile::new(compile(string_src), "String.jack".into());
+    let ram = eval(&[prog_vm_src, string_vm_src, malloc_vm_src()], 5000);
+    assert_eq!(ram[0], 257);
+    assert_eq!(ram[256], 0xffff);
+}
+
+// Very primitive bump allocator that never frees. Good enough to test object construction.
+fn malloc_vm_src() -> SourceFile {
+    let mem_src = r#"
+    class Memory {
+      static int next;
+      function void alloc(int n) {
+        var int ptr;
+        if (next < 2048) {
+          let next = 2048;
+        }
+        let ptr = next;
+        let next = next + n;
+        return ptr;
+      }
+    }
+    "#;
+    SourceFile::new(compile(mem_src), "Memory.jack".into())
+}
+
 fn compile_and_evaluate(jack_src: &str, steps: usize) -> Vec<u16> {
-    let source_file = SourceFile::new(compile(jack_src), "Sys.jack".into());
-    let asm_src = vm::translate(&[source_file], true).unwrap();
+    let prog_vm_src = SourceFile::new(compile(jack_src), "Sys.jack".into());
+    eval(&[prog_vm_src], steps)
+}
+
+fn compile(jack_src: &str) -> String {
+    let class = jack::Parser::new(jack::Tokenizer::new(jack_src))
+        .parse()
+        .unwrap();
+    jack::Codegen::new(&class).generate().unwrap().into()
+}
+
+fn assemble(asm_src: &str) -> String {
+    let mut parser = asm::Parser::new(asm::Tokenizer::new(asm_src));
+    let mut cg = asm::Codegen::new();
+    cg.generate(&parser.parse().unwrap()).unwrap()
+}
+
+fn eval(vm_src_files: &[SourceFile], steps: usize) -> Vec<u16> {
+    let asm_src = vm::translate(vm_src_files, true).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -145,19 +314,6 @@ fn compile_and_evaluate(jack_src: &str, steps: usize) -> Vec<u16> {
     }
 
     emu.memory().to_owned()
-}
-
-fn compile(jack_src: &str) -> String {
-    let class_node = jack::Parser::new(jack::Tokenizer::new(jack_src))
-        .parse()
-        .unwrap();
-    jack::Codegen::new().generate(&class_node).unwrap().into()
-}
-
-fn assemble(asm_src: &str) -> String {
-    let mut parser = asm::Parser::new(asm::Tokenizer::new(asm_src));
-    let mut cg = asm::Codegen::new();
-    cg.generate(&parser.parse().unwrap()).unwrap()
 }
 
 fn parse_rom(hack_src: &str) -> Vec<u16> {

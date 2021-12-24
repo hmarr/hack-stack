@@ -354,18 +354,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_subroutine_call(&mut self) -> ParseResult<SubroutineCall<'a>> {
-        let (class, subroutine) = match self.peek().kind {
+        let (lhs, subroutine) = match self.peek().kind {
             Kind::Symbol("(") => {
                 self.advance();
                 (None, self.prev_token.to_spanned_str())
             }
             Kind::Symbol(".") => {
-                let class = self.token;
-                self.advance(); // class
+                let lhs = self.token;
+                self.advance(); // lhs
                 self.advance(); // .
                 let subroutine = self.token;
                 self.advance(); // subroutine
-                (Some(class.to_spanned_str()), subroutine.to_spanned_str())
+                (Some(lhs.to_spanned_str()), subroutine.to_spanned_str())
             }
             _ => return Err(self.unexpected_token_error("subroutine call")),
         };
@@ -384,7 +384,7 @@ impl<'a> Parser<'a> {
         self.expect_symbol(")")?;
 
         Ok(SubroutineCall {
-            class,
+            lhs,
             subroutine,
             args,
         })
@@ -658,7 +658,7 @@ mod tests {
                         })],
                     }),
                     Stmt::Do(SubroutineCall {
-                        class: Some(Spanned::void("Sys")),
+                        lhs: Some(Spanned::void("Sys")),
                         subroutine: Spanned::void("print"),
                         args: vec![Spanned::void(Box::new(Expr::StrLit(Spanned::void("hi"))))],
                     }),
@@ -737,7 +737,7 @@ mod tests {
                     Stmt::Return(ReturnStmt {
                         expr: Some(Spanned::void(Box::new(Expr::SubroutineCall(
                             SubroutineCall {
-                                class: None,
+                                lhs: None,
                                 subroutine: Spanned::void("baz"),
                                 args: vec![Spanned::void(Box::new(Expr::IntLit(Spanned::void(1))))],
                             },
@@ -746,7 +746,7 @@ mod tests {
                     Stmt::Return(ReturnStmt {
                         expr: Some(Spanned::void(Box::new(Expr::SubroutineCall(
                             SubroutineCall {
-                                class: Some(Spanned::void("Foo")),
+                                lhs: Some(Spanned::void("Foo")),
                                 subroutine: Spanned::void("quux"),
                                 args: vec![
                                     Spanned::void(Box::new(Expr::IntLit(Spanned::void(1)))),

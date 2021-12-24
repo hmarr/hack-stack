@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SymbolKind {
     Var,
     Arg,
@@ -21,6 +21,7 @@ impl SymbolKind {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct SymbolTableEntry<'a> {
     pub kind: SymbolKind,
     pub ty: &'a str,
@@ -39,17 +40,21 @@ impl<'a> SymbolTable<'a> {
     }
 
     pub fn add(&mut self, kind: SymbolKind, ty: &'a str, name: &'a str) {
-        let index = self.table.iter().filter(|(_, e)| e.kind == kind).count() as u16;
+        let index = self.num_entries(kind);
         self.table
             .insert(name, SymbolTableEntry { index, kind, ty });
     }
 
-    pub fn get(&self, name: &str) -> Option<&SymbolTableEntry> {
+    pub fn get(&self, name: &str) -> Option<&SymbolTableEntry<'a>> {
         self.table.get(name)
     }
 
     pub fn reset(&mut self) {
         self.table.clear();
+    }
+
+    pub fn num_entries(&self, kind: SymbolKind) -> u16 {
+        self.table.iter().filter(|(_, e)| e.kind == kind).count() as u16
     }
 }
 
