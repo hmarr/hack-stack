@@ -53,6 +53,11 @@ impl HackEmulator {
     }
 
     #[wasm_bindgen]
+    pub fn set_keyboard(&mut self, keycode: u16) {
+        self.emu.set_keyboard(keycode);
+    }
+
+    #[wasm_bindgen]
     pub fn cpu_state(&self) -> CpuState {
         CpuState {
             d: self.emu.cpu.d,

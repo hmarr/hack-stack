@@ -6,6 +6,7 @@ import { RomLoader } from './rom-loader';
 
 class App {
   emulator: HackEmulator;
+  keysPressed: number[];
   debugMode: boolean;
   cpuView: CpuView;
   screenView: GLScreenView;
@@ -17,6 +18,7 @@ class App {
 
   constructor() {
     this.emulator = new HackEmulator();
+    this.keysPressed = [];
     this.debugMode = false;
     this.running = false;
     this.lastFrameTime = performance.now();
@@ -81,12 +83,16 @@ class App {
   start() {
     this.running = true;
     this.startBtn.innerText = 'Stop';
-    this.update(50000);
+    document.addEventListener('keydown', this.handleKeydown);
+    document.addEventListener('keyup', this.handleKeyup);
+    this.update(200000);
   }
 
   stop() {
     this.running = false;
     this.startBtn.innerText = 'Start';
+    document.removeEventListener('keydown', this.handleKeydown);
+    document.removeEventListener('keyup', this.handleKeyup);
   }
 
   update(steps: number) {
@@ -121,6 +127,39 @@ class App {
     this.perfView.el.style.display = status ? '' : 'none';
     this.stepBtn.style.display = status ? '' : 'none';
   }
+
+  handleKeydown = (ev: KeyboardEvent) => {
+    const keyCode = KeyMap[ev.code];
+    if (this.keysPressed.includes(keyCode)) {
+      return;
+    }
+
+    this.keysPressed.push(keyCode);
+    this.emulator.set_keyboard(keyCode);
+
+    ev.preventDefault();
+  };
+
+  handleKeyup = (ev: KeyboardEvent) => {
+    const keyCode = KeyMap[ev.code];
+    this.keysPressed = this.keysPressed.filter(k => k !== keyCode);
+
+    const newKeyCode = this.keysPressed[this.keysPressed.length - 1] || 0;
+    this.emulator.set_keyboard(newKeyCode);
+  };
+}
+
+const KeyMap: { [keyName: string]: number } = {
+  ArrowLeft: 130,
+  ArrowUp: 131,
+  ArrowRight: 132,
+  ArrowDown: 133,
+};
+for (let i = 'A'.charCodeAt(0); i <= 'Z'.charCodeAt(0); i++) {
+  KeyMap[`Key${String.fromCharCode(i)}`] = i;
+}
+for (let i = '0'.charCodeAt(0); i <= '9'.charCodeAt(0); i++) {
+  KeyMap[`Key${String.fromCharCode(i)}`] = i;
 }
 
 const app = new App();
