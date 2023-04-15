@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub struct CPU {
+pub struct Cpu {
     pub d: u16,
     pub a: u16,
     pub m: u16,
@@ -7,7 +7,7 @@ pub struct CPU {
     pub write_m: bool,
 }
 
-impl CPU {
+impl Cpu {
     pub fn new() -> Self {
         Self {
             d: 0,
@@ -42,6 +42,7 @@ impl CPU {
         self.pc += 1;
     }
 
+    #[allow(clippy::unusual_byte_groupings)]
     pub fn execute_c_instruction(&mut self, instruction: u16) -> Result<(), String> {
         let comp_bits = (instruction >> 6) & 0b1111111;
         let alu_result = match comp_bits {
@@ -141,7 +142,7 @@ mod tests {
 
     #[test]
     fn test_alu() {
-        let mut cpu = CPU::new();
+        let mut cpu = Cpu::new();
         cpu.d = 2;
         cpu.m = 1;
         cpu.execute(assemble_one("@12")).unwrap();
@@ -206,6 +207,6 @@ mod tests {
         cpu.execute(assemble_one("AM=M+1")).unwrap();
         assert_eq!(cpu.a, 124);
         assert_eq!(cpu.m, 124);
-        assert_eq!(cpu.write_m, true);
+        assert!(cpu.write_m);
     }
 }

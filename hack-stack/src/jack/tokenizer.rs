@@ -89,7 +89,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn tokenize_keyword_or_identifier(&mut self) -> Token<'a> {
-        let span = self.cursor.eat_while(|c| ident_char(c));
+        let span = self.cursor.eat_while(ident_char);
         let ident = &self.src[span.start..span.end];
         let kind = match ident {
             "class" | "constructor" | "method" | "function" | "int" | "boolean" | "char"
@@ -169,6 +169,7 @@ fn ident_char(c: char) -> bool {
     }
 }
 
+#[allow(clippy::match_like_matches_macro)]
 fn symbol_char(c: char) -> bool {
     match c {
         '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';' | '=' | '.' | '+' | '-' | '*' | '/' | '&'

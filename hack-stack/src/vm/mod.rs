@@ -10,10 +10,10 @@ pub use tokenizer::Tokenizer;
 
 use crate::common::{SourceFile, SpanError};
 
-pub fn translate<'a>(
-    source_files: &'a [SourceFile],
+pub fn translate(
+    source_files: &[SourceFile],
     bootstrap: bool,
-) -> Result<String, (&'a SourceFile, Vec<SpanError>)> {
+) -> Result<String, (&SourceFile, Vec<SpanError>)> {
     let mut buf = String::new();
 
     if bootstrap {

@@ -9,7 +9,7 @@ use hack_stack::common;
 use hack_stack::vm;
 
 fn main() {
-    if let Err(_) = translate_main() {
+    if translate_main().is_err() {
         std::process::exit(1);
     }
 }

@@ -104,7 +104,7 @@ impl<'a> Iterator for Tokenizer<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match self.next_token() {
             Token {
-                kind: Kind::EOF, ..
+                kind: Kind::Eof, ..
             } => None,
             token => Some(token),
         }
@@ -126,7 +126,7 @@ mod tests {
         assert_eq!(
             t.next_token(),
             Token {
-                kind: Kind::EOF,
+                kind: Kind::Eof,
                 span: Span::new(0, 0)
             }
         );
@@ -164,7 +164,7 @@ mod tests {
                 Kind::AtSign,
                 Kind::Minus,
                 Kind::Number("123"),
-                Kind::EOL,
+                Kind::Eol,
                 Kind::AtSign,
                 Kind::Identifier("my$var"),
             ]
@@ -206,10 +206,10 @@ mod tests {
                 Kind::LParen,
                 Kind::Identifier("LOOP"),
                 Kind::RParen,
-                Kind::EOL,
+                Kind::Eol,
                 Kind::AtSign,
                 Kind::Number("1"),
-                Kind::EOL,
+                Kind::Eol,
                 Kind::LParen,
                 Kind::Identifier("END"),
                 Kind::RParen
@@ -222,7 +222,7 @@ mod tests {
         let tokens = tokenize("// foo\n// bar");
         assert_eq!(
             tokens.iter().map(|t| t.kind).collect::<Vec<Kind>>(),
-            vec![Kind::Comment("// foo"), Kind::EOL, Kind::Comment("// bar"),]
+            vec![Kind::Comment("// foo"), Kind::Eol, Kind::Comment("// bar"),]
         );
 
         let tokens = tokenize(" /!foo");

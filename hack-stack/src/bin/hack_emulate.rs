@@ -3,7 +3,7 @@ use std::{fs, io::stdin};
 use hack_stack::emulator;
 
 fn main() {
-    if let Err(_) = emulate_main() {
+    if emulate_main().is_err() {
         std::process::exit(1);
     }
 }

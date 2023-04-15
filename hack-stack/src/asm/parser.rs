@@ -35,7 +35,7 @@ impl<'a> Parser<'a> {
                 Ok(None) => break,
                 Err(e) => {
                     // When we get an error, skip to the next line to try to recover
-                    while !matches!(self.token.kind, Kind::EOL | Kind::EOF) {
+                    while !matches!(self.token.kind, Kind::Eol | Kind::Eof) {
                         self.advance();
                     }
                     errors.push(e)
@@ -51,12 +51,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_instruction(&mut self) -> ParseResult<Option<ast::Instruction<'a>>> {
-        while matches!(self.token.kind, Kind::EOL | Kind::Comment(_)) {
+        while matches!(self.token.kind, Kind::Eol | Kind::Comment(_)) {
             self.advance();
         }
 
         match self.token.kind {
-            Kind::EOF => Ok(None),
+            Kind::Eof => Ok(None),
             Kind::LParen => Ok(Some(self.parse_label()?)),
             Kind::AtSign => Ok(Some(self.parse_a_instruction()?)),
             Kind::Number(_) | Kind::Identifier(_) | Kind::Minus | Kind::Not => {
@@ -287,7 +287,7 @@ impl<'a> Parser<'a> {
     fn eat_terminator(&mut self) -> ParseResult<()> {
         match self.token {
             Token {
-                kind: Kind::EOL | Kind::EOF,
+                kind: Kind::Eol | Kind::Eof,
                 ..
             } => {
                 self.advance();

@@ -103,8 +103,8 @@ impl<'a> Codegen<'a> {
         let locals = dec
             .statements
             .iter()
-            .map(|s| match &s {
-                &Stmt::Var(v) => v.names.len(),
+            .map(|s| match s {
+                Stmt::Var(v) => v.names.len(),
                 _ => 0,
             })
             .sum::<usize>();
@@ -164,12 +164,12 @@ impl<'a> Codegen<'a> {
 
     fn compile_statement(&mut self, stmt: &'a Stmt) {
         match stmt {
-            Stmt::Var(v) => self.handle_var_dec(&v),
+            Stmt::Var(v) => self.handle_var_dec(v),
             Stmt::Let(l) => self.compile_let(l),
             Stmt::If(i) => self.compile_if(i),
             Stmt::While(w) => self.compile_while(w),
             Stmt::Do(d) => self.compile_do(d),
-            Stmt::Return(s) => self.compile_return(&s),
+            Stmt::Return(s) => self.compile_return(s),
         }
     }
 
@@ -388,7 +388,7 @@ impl<'a> Codegen<'a> {
         let entry = self
             .func_sym_tab
             .get(name)
-            .or(self.class_sym_tab.get(name))?;
+            .or_else(|| self.class_sym_tab.get(name))?;
         Some(entry.clone())
     }
 }

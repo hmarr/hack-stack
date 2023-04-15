@@ -16,15 +16,15 @@ pub enum Kind<'a> {
 
 impl<'a> Kind<'a> {
     pub fn literal(&self) -> &'a str {
-        match self {
-            &Kind::Symbol(v) => v,
-            &Kind::Keyword(v) => v,
-            &Kind::Ident(v) => v,
-            &Kind::IntConst(v) => v,
-            &Kind::StrConst(v) => v,
-            &Kind::Comment(v) => v,
-            &Kind::EOF => "EOF",
-            &Kind::Invalid(s) => s,
+        match *self {
+            Kind::Symbol(v) => v,
+            Kind::Keyword(v) => v,
+            Kind::Ident(v) => v,
+            Kind::IntConst(v) => v,
+            Kind::StrConst(v) => v,
+            Kind::Comment(v) => v,
+            Kind::EOF => "EOF",
+            Kind::Invalid(s) => s,
         }
     }
 }

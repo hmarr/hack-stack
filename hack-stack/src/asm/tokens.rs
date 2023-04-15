@@ -17,30 +17,30 @@ pub enum Kind<'a> {
     Semicolon,
     LParen,
     RParen,
-    EOL,
-    EOF,
+    Eol,
+    Eof,
     Invalid(char),
 }
 
 impl<'a> fmt::Display for Kind<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            &Kind::Comment(v) => v,
-            &Kind::Number(v) => v,
-            &Kind::Identifier(v) => v,
-            &Kind::AtSign => "@",
-            &Kind::Equals => "=",
-            &Kind::Plus => "+",
-            &Kind::Minus => "-",
-            &Kind::Not => "!",
-            &Kind::And => "&",
-            &Kind::Or => "|",
-            &Kind::Semicolon => ";",
-            &Kind::LParen => "(",
-            &Kind::RParen => ")",
-            &Kind::EOL => "<newline>",
-            &Kind::EOF => "<eof>",
-            &Kind::Invalid(c) => {
+        let s = match *self {
+            Kind::Comment(v) => v,
+            Kind::Number(v) => v,
+            Kind::Identifier(v) => v,
+            Kind::AtSign => "@",
+            Kind::Equals => "=",
+            Kind::Plus => "+",
+            Kind::Minus => "-",
+            Kind::Not => "!",
+            Kind::And => "&",
+            Kind::Or => "|",
+            Kind::Semicolon => ";",
+            Kind::LParen => "(",
+            Kind::RParen => ")",
+            Kind::Eol => "<newline>",
+            Kind::Eof => "<eof>",
+            Kind::Invalid(c) => {
                 return f.write_char(c);
             }
         };
@@ -57,7 +57,7 @@ pub struct Token<'a> {
 impl<'a> Token<'a> {
     pub fn from_char(pos: usize, c: char) -> Token<'a> {
         let kind = match c {
-            '\n' => Kind::EOL,
+            '\n' => Kind::Eol,
             '@' => Kind::AtSign,
             '=' => Kind::Equals,
             '+' => Kind::Plus,
@@ -76,7 +76,7 @@ impl<'a> Token<'a> {
 
     pub fn eof(pos: usize) -> Token<'a> {
         Token {
-            kind: Kind::EOF,
+            kind: Kind::Eof,
             span: Span::new(pos, pos),
         }
     }

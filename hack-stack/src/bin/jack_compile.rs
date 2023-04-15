@@ -9,7 +9,7 @@ use hack_stack::common;
 use hack_stack::jack;
 
 fn main() {
-    if let Err(_) = compile_main() {
+    if compile_main().is_err() {
         std::process::exit(1);
     }
 }
@@ -38,7 +38,7 @@ fn compile_main() -> Result<(), ()> {
     Ok(())
 }
 
-fn compile_file(source_path: &String) -> Result<(), ()> {
+fn compile_file(source_path: &str) -> Result<(), ()> {
     let source = fs::read_to_string(source_path).map_err(|err| {
         eprintln!("reading {}: {}", source_path, err);
     })?;
@@ -48,7 +48,7 @@ fn compile_file(source_path: &String) -> Result<(), ()> {
     let class = match parser.parse() {
         Ok(class) => class,
         Err(err) => {
-            display_span_errors(&source_file, &vec![err]);
+            display_span_errors(&source_file, &[err]);
             return Err(());
         }
     };
@@ -74,7 +74,7 @@ fn compile_file(source_path: &String) -> Result<(), ()> {
     Ok(())
 }
 
-fn display_span_errors(source_file: &common::SourceFile, errs: &Vec<common::SpanError>) {
+fn display_span_errors(source_file: &common::SourceFile, errs: &[common::SpanError]) {
     for err in errs {
         let (line, col) = source_file.loc_for_byte_pos(err.span.start);
         eprintln!("line {}, char {}: {}", line, col, err.msg);

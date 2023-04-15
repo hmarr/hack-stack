@@ -8,7 +8,7 @@ use hack_stack::asm;
 use hack_stack::common;
 
 fn main() {
-    if let Err(_) = assemble_main() {
+    if assemble_main().is_err() {
         std::process::exit(1);
     }
 }

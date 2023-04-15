@@ -1,9 +1,9 @@
-use self::cpu::CPU;
+use self::cpu::Cpu;
 
 mod cpu;
 
 pub struct Emulator {
-    pub cpu: CPU,
+    pub cpu: Cpu,
     rom: Vec<u16>,
     memory: Vec<u16>,
 }
@@ -11,7 +11,7 @@ pub struct Emulator {
 impl Emulator {
     pub fn new(rom: Vec<u16>) -> Self {
         Self {
-            cpu: CPU::new(),
+            cpu: Cpu::new(),
             rom,
             memory: vec![0; 0x6001],
         }
@@ -41,8 +41,11 @@ impl Emulator {
 
     pub fn set_memory(&mut self, addr: u16, val: u16) -> Result<(), String> {
         match addr {
-            0..=0x6000 => Ok(self.memory[addr as usize] = val),
-            _ => Err(format!("Out of bounds memory access ({:#x})", addr))?,
+            0..=0x6000 => {
+                self.memory[addr as usize] = val;
+                Ok(())
+            }
+            _ => Err(format!("Out of bounds memory access ({:#x})", addr)),
         }
     }
 

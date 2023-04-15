@@ -490,7 +490,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(Spanned { item: lit, span })
             }
-            _ => Err(self.unexpected_token_error(&format!("identifier"))),
+            _ => Err(self.unexpected_token_error("identifier")),
         }
     }
 

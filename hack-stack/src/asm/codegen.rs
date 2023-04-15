@@ -127,6 +127,7 @@ impl<'a> Codegen<'a> {
         Ok(binary_inst | (comp_bits << 6) | (dest_bits << 3) | jump_bits)
     }
 
+    #[allow(clippy::unusual_byte_groupings)]
     fn comp_bits(&self, comp: &ast::Comp) -> Result<u16, String> {
         use ast::{BinaryOperator::*, Bit::*, Operand::*, Register::*, UnaryOperator};
 

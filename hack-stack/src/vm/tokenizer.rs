@@ -66,7 +66,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn tokenize_keyword_or_ident(&mut self) -> Token<'a> {
-        let span = self.cursor.eat_while(|c| ident_char(c));
+        let span = self.cursor.eat_while(ident_char);
         let ident = &self.src[span.start..span.end];
         let kind = match ident {
             "push" | "pop" | "add" | "sub" | "neg" | "and" | "or" | "not" | "eq" | "lt" | "gt"
