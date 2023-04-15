@@ -26,7 +26,7 @@ impl<'a> Codegen<'a> {
         Self {
             source_file,
             buf: String::new(),
-            current_module: source_file.name.replace(".vm", "").replace("/", ":"),
+            current_module: source_file.name.replace(".vm", "").replace('/', ":"),
             current_function: None,
             next_label_index: 0,
             emitted_return_def: false,
