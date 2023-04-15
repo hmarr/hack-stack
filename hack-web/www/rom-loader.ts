@@ -1,12 +1,7 @@
-import pong from './roms/pong.hack';
-import snek from './roms/snek.hack';
-import snek2 from './roms/snek2.hack';
-
-const ROMS: { [k: string]: string } = {
-  Snek: snek,
-  Snek2: snek2,
-  Pong: pong,
-};
+// Dynamically load all ROMs from the roms folder
+const roms: { [k: string]: string } = {};
+const requireContext = require.context('./roms', true, /\.hack$/);
+requireContext.keys().forEach((key) => (roms[key.replace("./", "").replace(/\.hack$/, "")] = requireContext(key)));
 
 export class RomLoader {
   el: HTMLElement;
@@ -16,7 +11,7 @@ export class RomLoader {
 
     const select = document.createElement('select');
 
-    for (const name of Object.keys(ROMS)) {
+    for (const name of Object.keys(roms)) {
       const option = document.createElement('option');
       option.value = name;
       option.innerText = name;
@@ -27,7 +22,7 @@ export class RomLoader {
     const loadBtn = document.createElement('button');
     loadBtn.innerText = 'Load ROM';
     loadBtn.addEventListener('click', async () => {
-      const rsp = await fetch(ROMS[select.value]);
+      const rsp = await fetch(roms[select.value]);
       onLoad(await rsp.text());
     });
     this.el.append(loadBtn);

@@ -15,6 +15,7 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@types/webpack-env": "^1.18.0",
     "@wasm-tool/wasm-pack-plugin": "^1.6.0",
     "html-webpack-plugin": "^5.5.0",
     "text-encoding": "^0.7.0",
