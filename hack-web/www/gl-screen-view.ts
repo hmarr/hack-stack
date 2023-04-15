@@ -16,13 +16,14 @@ const fsSource = `
 precision mediump float;
 
 varying vec2 v_texcoord;
-uniform vec2 u_resolution;
+uniform vec2 u_fb_resolution;
+uniform vec2 u_screen_resolution;
 uniform vec2 u_texsize;
 uniform sampler2D u_texture;
 
 void main() {
   // Figure out the corresponding x-axis pixel in the screen
-  float texel_coord = floor(v_texcoord.x * u_resolution.x);
+  float texel_coord = floor(v_texcoord.x * u_fb_resolution.x);
 
   // Texels are 16-bit Hack computer words, so calculate the bit offset
   float bit_index = mod(texel_coord, 16.0);
@@ -47,7 +48,20 @@ void main() {
   // original domain, then extract the relevant bit to get the pixel value.
   float pixel = mod(floor((nibble * 255.0) / pow(2.0, mod(bit_index , 4.0))), 2.0);
 
-  gl_FragColor = vec4(pixel * 0.4, pixel * 0.7, pixel * 0.2, 1.0);
+  // Simulate RGB pixels
+  vec4 tint = vec4(0.0, 0.55, 0.0, 1.0);
+  // The resolution of the grid should decrease as the screen gets smaller
+  // to avoid all the pixels being the same color.
+  if (mod(floor(v_texcoord.x * u_screen_resolution.x * 0.5), 2.0) < 0.01) {
+    tint.y = 0.0;
+    if (mod(floor(v_texcoord.y * u_screen_resolution.y * 0.5), 2.0) <= 0.01) {
+      tint.x = 1.0;
+    } else {
+      tint.z = 1.0;
+    }
+  }
+  gl_FragColor = vec4(pixel * 0.4, pixel * 0.7, pixel * 0.2, 1.0) + tint * 0.4;
+
 }
 `;
 
@@ -56,6 +70,7 @@ export class GLScreenView {
   gl: WebGLRenderingContext;
   shaderProgram: WebGLProgram;
   texture: WebGLTexture;
+  uScreenResolutionLoc: WebGLUniformLocation | null;
   emulator: HackEmulator;
 
   constructor(emulator: HackEmulator) {
@@ -82,6 +97,10 @@ export class GLScreenView {
     this.initVertexBuffers();
     this.texture = this.initTexture();
 
+    // Set the screen resolution uniform, which is updated on resize.
+    this.uScreenResolutionLoc = this.gl.getUniformLocation(this.shaderProgram, 'u_screen_resolution');
+    this.gl.uniform2f(this.uScreenResolutionLoc, this.el.width, this.el.height);
+
     this.update();
   }
 
@@ -96,6 +115,7 @@ export class GLScreenView {
     if (this.el.width != width || this.el.height != height) {
       this.el.width = width;
       this.el.height = height;
+      this.gl.uniform2f(this.uScreenResolutionLoc, this.el.width, this.el.height);
     }
   }
 
@@ -184,9 +204,9 @@ export class GLScreenView {
     const uTexsizeLoc = this.gl.getUniformLocation(this.shaderProgram, 'u_texsize');
     this.gl.uniform2f(uTexsizeLoc, 32, 256);
 
-    // `resolution` is the actual pixel resolution of the screen. As one word
+    // `fb_resolution` is the actual pixel resolution of the frame buffer. As one word
     // holds 16 pixel values, the x-axis expands from 32 to 32 * 16 = 512.
-    const uResolutionLoc = this.gl.getUniformLocation(this.shaderProgram, 'u_resolution');
+    const uResolutionLoc = this.gl.getUniformLocation(this.shaderProgram, 'u_fb_resolution');
     this.gl.uniform2f(uResolutionLoc, 512, 256);
 
     return texture;
