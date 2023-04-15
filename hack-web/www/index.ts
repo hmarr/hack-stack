@@ -15,6 +15,7 @@ class App {
   lastFrameTime: number;
   startBtn: HTMLButtonElement;
   stepBtn: HTMLButtonElement;
+  speedSlider: HTMLInputElement;
 
   constructor() {
     this.emulator = new HackEmulator();
@@ -48,6 +49,8 @@ class App {
     diagsEl.append(this.perfView.el);
 
     const controlsEl = document.createElement('div');
+    controlsEl.style.display = 'flex';
+    controlsEl.style.flexDirection = 'row';
 
     this.startBtn = document.createElement('button');
     this.startBtn.innerText = 'Start';
@@ -62,6 +65,20 @@ class App {
     this.stepBtn.disabled = true;
     this.stepBtn.addEventListener('click', () => this.update(1));
     controlsEl.append(this.stepBtn);
+
+    const speedLabel = document.createElement('label');
+    speedLabel.innerText = 'Emulation speed:';
+    speedLabel.style.color = 'white';
+    speedLabel.style.marginLeft = '1.5rem';
+    controlsEl.append(speedLabel);
+
+    this.speedSlider = document.createElement('input');
+    this.speedSlider.type = 'range';
+    this.speedSlider.min = '1';
+    this.speedSlider.max = '500000';
+    this.speedSlider.value = '200000';
+    this.speedSlider.style.marginRight = '1.5rem';
+    controlsEl.append(this.speedSlider);
 
     const romLoader = new RomLoader(rom => {
       this.emulator.load_rom(rom);
@@ -120,7 +137,7 @@ class App {
     }
 
     if (this.running) {
-      requestAnimationFrame(this.update.bind(this, steps));
+      requestAnimationFrame(this.update.bind(this, parseInt(this.speedSlider.value, 10)));
     }
   }
 
