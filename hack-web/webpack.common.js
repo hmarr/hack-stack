@@ -22,7 +22,7 @@ module.exports = {
     ]
   },
   plugins: [
-    new HtmlWebpackPlugin(),
+    new HtmlWebpackPlugin({ template: './www/template.html' }),
     new webpack.ProvidePlugin({
       TextDecoder: ['text-encoding', 'TextDecoder'],
       TextEncoder: ['text-encoding', 'TextEncoder']

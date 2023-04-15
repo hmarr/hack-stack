@@ -26,6 +26,7 @@ class App {
     const appEl = document.createElement('div');
     appEl.style.display = 'flex';
     appEl.style.flexDirection = 'column';
+    appEl.style.padding = '10px';
 
     const screenEl = document.createElement('div');
     screenEl.style.flex = '1';
@@ -75,6 +76,7 @@ class App {
 
     document.body.append(appEl);
     document.body.style.background = 'rgb(40 36 39)';
+    document.body.style.boxSizing = 'border-box';
 
     this.toggleDebugMode(false);
 

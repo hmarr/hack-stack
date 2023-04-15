@@ -78,12 +78,12 @@ export class GLScreenView {
     this.el = document.createElement('canvas');
     this.el.width = 1024;
     this.el.height = 512;
-    this.el.style.padding = '0';
+    this.el.style.padding = '2px';
     this.el.style.margin = '0';
     this.el.style.width = '100%';
     this.el.style.height = '100%';
     this.el.style.border = '3px solid rgb(58 53 57)';
-    this.el.style.borderRadius = '10px';
+    this.el.style.borderRadius = '6px';
 
     const gl = this.el.getContext('webgl');
     if (!gl) {
