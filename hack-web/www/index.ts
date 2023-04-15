@@ -131,6 +131,10 @@ class App {
 
   handleKeydown = (ev: KeyboardEvent) => {
     const keyCode = KeyMap[ev.code];
+    if (!keyCode) {
+      return;
+    }
+
     if (this.keysPressed.includes(keyCode)) {
       return;
     }
