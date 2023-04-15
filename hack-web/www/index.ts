@@ -25,7 +25,13 @@ class App {
 
     const appEl = document.createElement('div');
     appEl.style.display = 'flex';
-    appEl.style.flexDirection = 'row';
+    appEl.style.flexDirection = 'column';
+
+    const screenEl = document.createElement('div');
+    screenEl.style.flex = '1';
+    this.screenView = new GLScreenView(this.emulator);
+    screenEl.append(this.screenView.el);
+    appEl.append(screenEl);
 
     const diagsEl = document.createElement('div');
     diagsEl.style.flex = '1';
@@ -38,17 +44,9 @@ class App {
     diagsEl.append(this.cpuView.el);
 
     this.perfView = new PerfView();
-    this.perfView.el.style.marginTop = '20px';
     diagsEl.append(this.perfView.el);
 
-    const screenEl = document.createElement('div');
-    screenEl.style.flex = '1';
-    this.screenView = new GLScreenView(this.emulator);
-    screenEl.append(this.screenView.el);
-    appEl.append(screenEl);
-
     const controlsEl = document.createElement('div');
-    controlsEl.style.marginTop = '20px';
 
     this.startBtn = document.createElement('button');
     this.startBtn.innerText = 'Start';
@@ -76,8 +74,11 @@ class App {
     diagsEl.append(controlsEl);
 
     document.body.append(appEl);
+    document.body.style.background = 'rgb(40 36 39)';
 
     this.toggleDebugMode(false);
+
+    this.screenView.update();
   }
 
   start() {

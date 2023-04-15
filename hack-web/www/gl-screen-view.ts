@@ -47,7 +47,7 @@ void main() {
   // original domain, then extract the relevant bit to get the pixel value.
   float pixel = mod(floor((nibble * 255.0) / pow(2.0, mod(bit_index , 4.0))), 2.0);
 
-  gl_FragColor = vec4(0.0, pixel, 0.0, 1.0);
+  gl_FragColor = vec4(pixel * 0.4, pixel * 0.7, pixel * 0.2, 1.0);
 }
 `;
 
@@ -63,8 +63,13 @@ export class GLScreenView {
     this.el = document.createElement('canvas');
     this.el.width = 1024;
     this.el.height = 512;
-    this.el.style.width = '512px';
-    this.el.style.height = '256px';
+    this.el.style.padding = '0';
+    this.el.style.margin = '0';
+    this.el.style.width = '100%';
+    this.el.style.height = '100%';
+    this.el.style.border = '3px solid rgb(58 53 57)';
+    this.el.style.borderRadius = '10px';
+
     const gl = this.el.getContext('webgl');
     if (!gl) {
       throw new Error("Couldn't get webgl context");
@@ -80,7 +85,23 @@ export class GLScreenView {
     this.update();
   }
 
+  resizeCanvas() {
+    if (this.el.clientWidth === 0 || this.el.clientHeight === 0) {
+      return;
+    }
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const actualWidth = this.el.clientWidth * devicePixelRatio;
+    const width = Math.pow(2, Math.floor(Math.log2(actualWidth)));
+    const height = width / 2;
+    if (this.el.width != width || this.el.height != height) {
+      this.el.width = width;
+      this.el.height = height;
+    }
+  }
+
   update() {
+    this.resizeCanvas();
+    this.gl.viewport(0, 0, this.el.width, this.el.height);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT);
     this.loadTexture();
     this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
