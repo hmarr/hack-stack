@@ -15,7 +15,6 @@ hack-stack = { path = "../hack-stack" }
 # all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
-wee_alloc = { version = "0.4.5", optional = true }
 
 [package.metadata.wasm-pack.profile.profiling]
 wasm-opt = false
