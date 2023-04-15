@@ -9,7 +9,9 @@ The main toolchain is written in Rust, and lives in the `hack-stack` directory. 
 - `jack-compile`: Compiler for the Jack programming language
 - `hack-emulate`: Emulator for the Hack computer
 
-There's also a web interface to the emulator, which lives in the `hack-web` directory. Under the hood it uses the Rust emulator from hack-stack, compiled to WebAssembly. The rest of it is written in TypeScript, and the frame buffer rendering happens on the GPU using WebGL.
+There's also a [web interface](https://hmarr.github.io/hack-stack) for the emulator, which lives in the `hack-web` directory. Under the hood it uses the Rust emulator from hack-stack, compiled to WebAssembly. The rest of it is written in TypeScript, and the frame buffer rendering happens on the GPU using WebGL.
+
+https://user-images.githubusercontent.com/110275/232240322-09289f6b-8410-4f24-83bb-dfce3ef5b72c.mov
 
 ## Building the toolchain
 
@@ -74,7 +76,9 @@ Assembled HelloWorld/HelloWorld.asm successfully, wrote to HelloWorld/HelloWorld
 
 ## Web emulator for the Hack computer
 
-To run the web emulator, you'll need to have [Node.js](https://nodejs.org/en/), the [Rust toolchain](https://www.rust-lang.org/tools/install), and [wasm-pack](https://rustwasm.github.io/wasm-pack/) installed. Then you can run the following commands to build and run the web emulator:
+You can try the emulator online out by visiting [hmarr.github.io/hack-stack](https://hmarr.github.io/hack-stack).
+
+To run the web emulator yourself, you'll need to have [Node.js](https://nodejs.org/en/), the [Rust toolchain](https://www.rust-lang.org/tools/install), and [wasm-pack](https://rustwasm.github.io/wasm-pack/) installed. Then you can run the following commands to build and run the web emulator:
 
 ```sh
 cd hack-web
