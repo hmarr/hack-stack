@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::{ast, ir};
 use crate::common::{SourceFile, SpanError};
 
@@ -8,6 +10,7 @@ pub struct Codegen<'a> {
     function_name: Option<String>,
     next_label_index: usize,
     emitted_return_def: bool,
+    emitted_call_defs: HashSet<String>,
     errors: Vec<SpanError>,
 }
 
@@ -39,6 +42,7 @@ impl<'a> Codegen<'a> {
             module_name: None,
             next_label_index: 0,
             emitted_return_def: false,
+            emitted_call_defs: HashSet::new(),
             errors: vec![],
         }
     }
@@ -357,6 +361,25 @@ impl<'a> Codegen<'a> {
         self.next_label_index += 1;
         self.set_a(ret);
         self.emit("D=A");
+
+        let call_label = format!("{}${}$call", inst.function, inst.args);
+        if !self.emitted_call_defs.contains(&call_label) {
+            // Emit call definition
+            self.emit(&format!("({})", &call_label));
+            self.call_def(inst);
+            self.emitted_call_defs.insert(call_label);
+        } else {
+            // Jump to existing call definition
+            self.set_a(&call_label);
+            self.emit("0;JMP");
+        }
+
+        // Return label - this is where we come back to once the function call ends
+        self.emit(&format!("({})", ret));
+    }
+
+    fn call_def(&mut self, inst: &ast::CallInstruction) {
+        // At the start of a call, D contains the return address
         self.pushd();
 
         // Save segment pointers to stack frame
@@ -384,9 +407,6 @@ impl<'a> Codegen<'a> {
         // Jump to function
         self.set_a(inst.function);
         self.emit("0;JMP");
-
-        // Return label - this is where we come back to once the function call ends
-        self.emit(&format!("({})", ret));
     }
 
     fn pop_to_segment(&mut self, seg: &str, offset: u16) {
@@ -794,6 +814,7 @@ mod tests {
         return
         function Test.bar 0
         call Test.foo 3
+        call Test.foo 3
         return";
 
         let expected = "
@@ -858,6 +879,7 @@ mod tests {
         // call Test.foo 3
         @Test.bar$Test.foo$ret.0
         D=A
+        (Test.foo$3$call)
         @SP
         M=M+1
         A=M-1
@@ -898,6 +920,13 @@ mod tests {
         @Test.foo
         0;JMP
         (Test.bar$Test.foo$ret.0)
+        
+        // call Test.foo 3
+        @Test.bar$Test.foo$ret.1
+        D=A
+        @Test.foo$3$call
+        0;JMP
+        (Test.bar$Test.foo$ret.1)
         
         // return
         @$vm.return
