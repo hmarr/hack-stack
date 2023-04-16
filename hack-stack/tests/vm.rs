@@ -4,7 +4,7 @@ mod fixtures;
 #[test]
 fn test_simple_add() {
     let source_files = &[load_fixture("SimpleAdd.vm")];
-    let asm_src = vm::translate(source_files, false).unwrap();
+    let asm_src = vm::translate(source_files, false, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -22,7 +22,7 @@ fn test_simple_add() {
 #[test]
 fn test_basic_test() {
     let source_files = &[load_fixture("BasicTest.vm")];
-    let asm_src = vm::translate(source_files, false).unwrap();
+    let asm_src = vm::translate(source_files, false, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -50,7 +50,7 @@ fn test_basic_test() {
 #[test]
 fn test_pointer_test() {
     let source_files = &[load_fixture("PointerTest.vm")];
-    let asm_src = vm::translate(source_files, false).unwrap();
+    let asm_src = vm::translate(source_files, false, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -71,7 +71,7 @@ fn test_pointer_test() {
 #[test]
 fn test_static_test() {
     let source_files = &[load_fixture("StaticTest.vm")];
-    let asm_src = vm::translate(source_files, false).unwrap();
+    let asm_src = vm::translate(source_files, false, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -88,7 +88,7 @@ fn test_static_test() {
 #[test]
 fn test_stack_test() {
     let source_files = &[load_fixture("StackTest.vm")];
-    let asm_src = vm::translate(source_files, false).unwrap();
+    let asm_src = vm::translate(source_files, false, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -115,7 +115,7 @@ fn test_stack_test() {
 #[test]
 fn test_basic_loop() {
     let source_files = &[load_fixture("BasicLoop.vm")];
-    let asm_src = vm::translate(source_files, false).unwrap();
+    let asm_src = vm::translate(source_files, false, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -136,7 +136,7 @@ fn test_basic_loop() {
 #[test]
 fn test_fibonacci_series() {
     let source_files = &[load_fixture("FibonacciSeries.vm")];
-    let asm_src = vm::translate(source_files, false).unwrap();
+    let asm_src = vm::translate(source_files, false, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -162,7 +162,7 @@ fn test_fibonacci_series() {
 #[test]
 fn test_simple_function() {
     let source_files = &[load_fixture("SimpleFunction.vm")];
-    let asm_src = vm::translate(source_files, false).unwrap();
+    let asm_src = vm::translate(source_files, false, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -195,7 +195,7 @@ fn test_simple_function() {
 #[test]
 fn test_nested_call() {
     let source_files = &[load_fixture("NestedCall/Sys.vm")];
-    let asm_src = vm::translate(source_files, false).unwrap();
+    let asm_src = vm::translate(source_files, true, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -235,7 +235,7 @@ fn test_fibonacci_element() {
         load_fixture("FibonacciElement/Main.vm"),
         load_fixture("FibonacciElement/Sys.vm"),
     ];
-    let asm_src = vm::translate(source_files, true).unwrap();
+    let asm_src = vm::translate(source_files, true, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 
@@ -255,7 +255,7 @@ fn test_statics_test() {
         load_fixture("StaticsTest/Class1.vm"),
         load_fixture("StaticsTest/Class2.vm"),
     ];
-    let asm_src = vm::translate(source_files, true).unwrap();
+    let asm_src = vm::translate(source_files, true, false).unwrap();
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 

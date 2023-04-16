@@ -305,7 +305,8 @@ fn assemble(asm_src: &str) -> String {
 }
 
 fn eval(vm_src_files: &[SourceFile], steps: usize) -> Vec<u16> {
-    let asm_src = vm::translate(vm_src_files, true).unwrap();
+    let asm_src = vm::translate(vm_src_files, true, true).unwrap();
+    println!("{}", asm_src);
     let hack_src = assemble(&asm_src);
     let mut emu = emulator::Emulator::new(parse_rom(&hack_src));
 

@@ -1,13 +1,14 @@
-use super::ast;
+use super::{ast, ir};
 use crate::common::{SourceFile, SpanError};
 
 pub struct Codegen<'a> {
-    source_file: &'a SourceFile,
     buf: String,
-    current_module: String,
-    current_function: Option<&'a str>,
+    source_file: Option<&'a SourceFile>,
+    module_name: Option<String>,
+    function_name: Option<String>,
     next_label_index: usize,
     emitted_return_def: bool,
+    errors: Vec<SpanError>,
 }
 
 enum PopOp {
@@ -22,65 +23,101 @@ const TEMP_BASE_ADDR: u16 = 5;
 const POINTER_BASE_ADDR: u16 = 3;
 
 impl<'a> Codegen<'a> {
-    pub fn new(source_file: &'a SourceFile) -> Self {
+    pub fn new(initialize_sp: bool) -> Self {
+        let mut buf = String::new();
+
+        if initialize_sp {
+            buf.push_str("// SP=256\n");
+            buf.push_str("@256\nD=A\n@0\nM=D");
+            buf.push_str("\n\n");
+        }
+
         Self {
-            source_file,
-            buf: String::new(),
-            current_module: source_file.name.replace(".vm", "").replace('/', ":"),
-            current_function: None,
+            buf,
+            function_name: None,
+            source_file: None,
+            module_name: None,
             next_label_index: 0,
             emitted_return_def: false,
+            errors: vec![],
         }
     }
 
-    pub fn generate(&mut self, ast: &'a [ast::Instruction<'a>]) -> Result<&str, Vec<SpanError>> {
-        let mut errors = vec![];
-        for instruction in ast {
-            // Emit a comment showing the VM instruction to make the assembly easier to read
-            self.buf.push_str("// ");
-            self.emit(self.source_file.str_for_span(instruction.span()));
+    pub fn generate_from_function(
+        &mut self,
+        function: &ir::Function<'a>,
+    ) -> Result<(), Vec<SpanError>> {
+        self.generate_from_ir(function.source_file, function.name, &function.instructions)
+    }
 
-            let res = match &instruction {
-                ast::Instruction::Push(push) => self.push(push),
-                ast::Instruction::Pop(pop) => self.pop(pop),
-                ast::Instruction::Add(_) => self.binary_op(PopOp::Add),
-                ast::Instruction::Sub(_) => self.binary_op(PopOp::MSubD),
-                ast::Instruction::Eq(_) => self.cmp("JEQ"),
-                ast::Instruction::Gt(_) => self.cmp("JGT"),
-                ast::Instruction::Lt(_) => self.cmp("JLT"),
-                ast::Instruction::Neg(_) => self.neg(),
-                ast::Instruction::And(_) => self.binary_op(PopOp::And),
-                ast::Instruction::Or(_) => self.binary_op(PopOp::Or),
-                ast::Instruction::Not(_) => self.not(),
-                ast::Instruction::Goto(goto) => self.goto(goto),
-                ast::Instruction::IfGoto(if_goto) => self.if_goto(if_goto),
-                ast::Instruction::Label(label) => self.label(label),
-                ast::Instruction::Function(function) => self.function(function),
-                ast::Instruction::Return(_) => self.return_(),
-                ast::Instruction::Call(call) => self.call(call),
-            };
-            self.buf.push('\n');
+    pub fn generate_from_ir(
+        &mut self,
+        source_file: &'a SourceFile,
+        function_name: &'a str,
+        instructions: &[ir::Instruction],
+    ) -> Result<(), Vec<SpanError>> {
+        self.module_name = Some(source_file.name.replace(".vm", "").replace('/', ":"));
+        self.function_name = Some(function_name.to_string());
+        self.source_file = Some(source_file);
+        self.errors.clear();
 
-            // If we got an error, keep track of it but keep going to see if we find more
-            if let Err(msg) = res {
-                errors.push(SpanError::new(msg, instruction.span()));
+        for inst in instructions.iter() {
+            match inst {
+                ir::Instruction::SimpleInstruction(instruction) => {
+                    self.generate_instruction(instruction);
+                }
             }
         }
 
-        // At the end of the program, enter an infinite loop to avoid running
-        // the program counter into unknown territory
-        self.emit("($vm.infinite_loop)");
-        self.emit("@$vm.infinite_loop");
-        self.emit("0;JMP");
-
-        if errors.is_empty() {
-            Ok(&self.buf)
+        if self.errors.is_empty() {
+            Ok(())
         } else {
-            Err(errors)
+            Err(std::mem::take(&mut self.errors))
         }
     }
 
-    fn push(&mut self, inst: &ast::PushInstruction) -> Result<(), String> {
+    pub fn finalize(mut self) -> Result<String, Vec<SpanError>> {
+        if self.errors.is_empty() {
+            // At the end of the program, enter an infinite loop to avoid running
+            // the program counter into unknown territory
+            self.buf.push_str("($vm.infinite_loop)\n");
+            self.buf.push_str("@$vm.infinite_loop\n");
+            self.buf.push_str("0;JMP\n");
+
+            Ok(self.buf)
+        } else {
+            Err(self.errors)
+        }
+    }
+
+    fn generate_instruction(&mut self, instruction: &ast::Instruction) {
+        // Emit a comment showing the VM instruction to make the assembly easier to read
+        self.buf.push_str("// ");
+        self.emit(self.source_file.unwrap().str_for_span(instruction.span()));
+
+        match &instruction {
+            ast::Instruction::Push(push) => self.push(push),
+            ast::Instruction::Pop(pop) => self.pop(pop),
+            ast::Instruction::Add(_) => self.binary_op(PopOp::Add),
+            ast::Instruction::Sub(_) => self.binary_op(PopOp::MSubD),
+            ast::Instruction::Eq(_) => self.cmp("JEQ"),
+            ast::Instruction::Gt(_) => self.cmp("JGT"),
+            ast::Instruction::Lt(_) => self.cmp("JLT"),
+            ast::Instruction::Neg(_) => self.neg(),
+            ast::Instruction::And(_) => self.binary_op(PopOp::And),
+            ast::Instruction::Or(_) => self.binary_op(PopOp::Or),
+            ast::Instruction::Not(_) => self.not(),
+            ast::Instruction::Goto(goto) => self.goto(goto),
+            ast::Instruction::IfGoto(if_goto) => self.if_goto(if_goto),
+            ast::Instruction::Label(label) => self.label(label),
+            ast::Instruction::Function(function) => self.function(function),
+            ast::Instruction::Return(_) => self.return_(),
+            ast::Instruction::Call(call) => self.call(call),
+        };
+        self.buf.push('\n');
+    }
+
+    fn push(&mut self, inst: &ast::PushInstruction) {
         match inst.segment {
             ast::Segment::Constant => {
                 // CONSTANT is a virtual memory segment that just loads constant
@@ -97,7 +134,7 @@ impl<'a> Codegen<'a> {
                 self.pushd();
             }
             ast::Segment::Static => {
-                self.set_a(&format!("{}.{}", self.current_module, inst.offset));
+                self.set_a(&format!("{}.{}", self.module_name(), inst.offset));
                 self.emit("D=M");
                 self.pushd();
             }
@@ -116,21 +153,24 @@ impl<'a> Codegen<'a> {
             }
             ast::Segment::Pointer => {
                 if inst.offset > 1 {
-                    return Err(String::from("pointer offset must be 0 or 1"));
+                    self.errors.push(SpanError::new(
+                        "pointer offset must be 0 or 1".to_string(),
+                        inst.span,
+                    ));
                 }
                 self.set_a(&(POINTER_BASE_ADDR + inst.offset).to_string());
                 self.emit("D=M");
                 self.pushd();
             }
         }
-        Ok(())
     }
 
-    fn pop(&mut self, inst: &ast::PopInstruction) -> Result<(), String> {
+    fn pop(&mut self, inst: &ast::PopInstruction) {
         match inst.segment {
             ast::Segment::Constant => {
-                return Err(String::from(
-                    "cannot pop to virtual memory segment constant",
+                self.errors.push(SpanError::new(
+                    "cannot pop to virtual memory segment constant".to_string(),
+                    inst.span,
                 ));
             }
             ast::Segment::Local => {
@@ -141,7 +181,7 @@ impl<'a> Codegen<'a> {
             }
             ast::Segment::Static => {
                 self.popd(PopOp::Assign);
-                self.set_a(&format!("{}.{}", self.current_module, inst.offset));
+                self.set_a(&format!("{}.{}", self.module_name(), inst.offset));
                 self.emit("M=D");
             }
             ast::Segment::This => {
@@ -157,17 +197,19 @@ impl<'a> Codegen<'a> {
             }
             ast::Segment::Pointer => {
                 if inst.offset > 1 {
-                    return Err(String::from("pointer offset must be 0 or 1"));
+                    self.errors.push(SpanError::new(
+                        "pointer offset must be 0 or 1".to_string(),
+                        inst.span,
+                    ));
                 }
                 self.popd(PopOp::Assign);
                 self.set_a(&(POINTER_BASE_ADDR + inst.offset).to_string());
                 self.emit("M=D");
             }
         }
-        Ok(())
     }
 
-    fn binary_op(&mut self, op: PopOp) -> Result<(), String> {
+    fn binary_op(&mut self, op: PopOp) {
         // Assign the top-of-stack operand (operand 2) to D
         self.popd(PopOp::Assign);
         // At this point, we've decremented SP by one, which is where we want SP
@@ -182,10 +224,9 @@ impl<'a> Codegen<'a> {
             PopOp::Or => self.emit("M=D|M"),
             PopOp::MSubD => self.emit("M=M-D"),
         }
-        Ok(())
     }
 
-    fn cmp(&mut self, jump_type: &str) -> Result<(), String> {
+    fn cmp(&mut self, jump_type: &str) {
         // Assign the top-of-stack operand (operand 2) to D
         self.popd(PopOp::Assign);
         // Subtract the D from the next operand (operand 1)
@@ -213,45 +254,38 @@ impl<'a> Codegen<'a> {
         // Emit the end label and bump SP
         self.emit(&format!("({})", end_label));
         self.inc_sp();
-
-        Ok(())
     }
 
-    fn neg(&mut self) -> Result<(), String> {
+    fn neg(&mut self) {
         self.set_a("SP");
         self.emit("A=M-1");
         self.emit("M=-M");
-        Ok(())
     }
 
-    fn not(&mut self) -> Result<(), String> {
+    fn not(&mut self) {
         self.set_a("SP");
         self.emit("A=M-1");
         self.emit("M=!M");
-        Ok(())
     }
 
-    fn goto(&mut self, inst: &ast::GotoInstruction) -> Result<(), String> {
+    fn goto(&mut self, inst: &ast::GotoInstruction) {
         self.set_a(&format!("{}${}", self.scope_identifier(), inst.label));
         self.emit("0;JMP");
-        Ok(())
     }
 
-    fn if_goto(&mut self, inst: &ast::IfGotoInstruction) -> Result<(), String> {
+    fn if_goto(&mut self, inst: &ast::IfGotoInstruction) {
         self.dec_deref_sp();
         self.emit("D=M");
         self.set_a(&format!("{}${}", self.scope_identifier(), inst.label));
         self.emit("D;JNE");
-        Ok(())
     }
 
-    fn label(&mut self, inst: &ast::LabelInstruction) -> Result<(), String> {
+    fn label(&mut self, inst: &ast::LabelInstruction) {
         self.emit(&format!("({}${})", self.scope_identifier(), inst.label));
-        Ok(())
     }
 
-    fn function(&mut self, inst: &'a ast::FunctionInstruction) -> Result<(), String> {
-        self.current_function = Some(inst.name);
+    fn function(&mut self, inst: &ast::FunctionInstruction) {
+        self.function_name = Some(inst.name.to_string());
 
         self.emit(&format!("({})", inst.name));
 
@@ -262,10 +296,9 @@ impl<'a> Codegen<'a> {
             self.emit("A=M-1");
             self.emit("M=0");
         }
-        Ok(())
     }
 
-    fn return_(&mut self) -> Result<(), String> {
+    fn return_(&mut self) {
         if !self.emitted_return_def {
             self.return_def();
             self.emitted_return_def = true;
@@ -273,8 +306,6 @@ impl<'a> Codegen<'a> {
 
         self.set_a("$vm.return");
         self.emit("0;JMP");
-
-        Ok(())
     }
 
     fn return_def(&mut self) {
@@ -315,7 +346,7 @@ impl<'a> Codegen<'a> {
         self.emit("0;JMP");
     }
 
-    fn call(&mut self, inst: &ast::CallInstruction) -> Result<(), String> {
+    fn call(&mut self, inst: &ast::CallInstruction) {
         // Push the return label (File.callingFunction$calledFunction$ret.n) to the stack
         let ret = &format!(
             "{}${}$ret.{}",
@@ -356,8 +387,6 @@ impl<'a> Codegen<'a> {
 
         // Return label - this is where we come back to once the function call ends
         self.emit(&format!("({})", ret));
-
-        Ok(())
     }
 
     fn pop_to_segment(&mut self, seg: &str, offset: u16) {
@@ -427,12 +456,15 @@ impl<'a> Codegen<'a> {
         self.buf.push('\n');
     }
 
-    fn scope_identifier(&self) -> &str {
-        if let Some(function) = self.current_function {
-            function
-        } else {
-            &self.current_module
-        }
+    fn module_name(&self) -> &String {
+        self.module_name.as_ref().unwrap()
+    }
+
+    fn scope_identifier(&self) -> &String {
+        self.function_name
+            .as_ref()
+            .or(self.module_name.as_ref())
+            .unwrap()
     }
 }
 
@@ -887,8 +919,19 @@ mod tests {
     fn translate(vm_src: &str) -> String {
         let mut parser = Parser::new(Tokenizer::new(vm_src));
         let source_file = SourceFile::new(vm_src.to_owned(), "Test.vm".to_owned());
-        let mut cg = Codegen::new(&source_file);
-        cg.generate(&parser.parse().unwrap()).unwrap().to_owned()
+        let mut cg = Codegen::new(false);
+        cg.generate_from_ir(
+            &source_file,
+            "Test",
+            &parser
+                .parse()
+                .unwrap()
+                .into_iter()
+                .map(ir::Instruction::SimpleInstruction)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        cg.finalize().unwrap()
     }
 
     fn strip_indent(s: &str) -> String {

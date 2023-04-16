@@ -53,9 +53,10 @@ fn translate_main() -> Result<(), ()> {
         source_files.push(common::SourceFile::new(source, source_file_name.to_owned()));
     }
 
-    let output_asm = vm::translate(&source_files, bootstrap).map_err(|(file, errs)| {
-        display_span_errors(file, errs);
-    })?;
+    let output_asm =
+        vm::translate(&source_files, bootstrap, bootstrap).map_err(|(file, errs)| {
+            display_span_errors(file, errs);
+        })?;
 
     let output_path = if source_path.is_dir() {
         let dir_name = source_path.file_name().unwrap().to_str().unwrap();

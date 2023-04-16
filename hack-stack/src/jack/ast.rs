@@ -162,8 +162,6 @@ pub struct BinOp<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct SubroutineCall<'a> {
-    // TODO: `class` doesn't cover all - it could be another object, it could be
-    // `this`, it could be a class
     pub lhs: Option<Spanned<&'a str>>,
     pub subroutine: Spanned<&'a str>,
     pub args: Vec<Spanned<Box<Expr<'a>>>>,
