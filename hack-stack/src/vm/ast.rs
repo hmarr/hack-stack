@@ -91,7 +91,7 @@ pub struct CallInstruction<'a> {
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Segment {
     Constant,
     Local,

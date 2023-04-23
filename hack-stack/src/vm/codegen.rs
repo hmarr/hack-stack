@@ -67,9 +67,49 @@ impl<'a> Codegen<'a> {
 
         for inst in instructions.iter() {
             match inst {
-                ir::Instruction::SimpleInstruction(instruction) => {
+                ir::Instruction::Vm(instruction) => {
                     self.generate_instruction(instruction);
                 }
+                ir::Instruction::Ext(instruction) => match instruction {
+                    ir::ExtInst::AddConst(constant) => {
+                        self.emit(&format!("// add-const {}", constant));
+                        match constant {
+                            0 => {}
+                            1 => {
+                                self.emit("@SP");
+                                self.emit("A=M-1");
+                                self.emit("M=M+1");
+                            }
+                            _ => {
+                                self.emit(&format!("@{}", constant));
+                                self.emit("D=A");
+                                self.emit("@SP");
+                                self.emit("A=M-1");
+                                self.emit("M=M+D");
+                            }
+                        }
+                        self.buf.push('\n');
+                    }
+                    ir::ExtInst::SubConst(constant) => {
+                        self.emit(&format!("// sub-const {}", constant));
+                        match constant {
+                            0 => {}
+                            1 => {
+                                self.emit("@SP");
+                                self.emit("A=M-1");
+                                self.emit("M=M-1");
+                            }
+                            _ => {
+                                self.emit(&format!("@{}", constant));
+                                self.emit("D=A");
+                                self.emit("@SP");
+                                self.emit("A=M-1");
+                                self.emit("M=M-D");
+                            }
+                        }
+                        self.buf.push('\n');
+                    }
+                },
             }
         }
 
@@ -956,7 +996,7 @@ mod tests {
                 .parse()
                 .unwrap()
                 .into_iter()
-                .map(ir::Instruction::SimpleInstruction)
+                .map(ir::Instruction::Vm)
                 .collect::<Vec<_>>(),
         )
         .unwrap();

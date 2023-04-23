@@ -2,10 +2,16 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::common::SourceFile;
 
-use super::ast;
+use super::{ast, optimize::optimize_const_binary_ops};
 
 pub enum Instruction<'a> {
-    SimpleInstruction(ast::Instruction<'a>),
+    Vm(ast::Instruction<'a>),
+    Ext(ExtInst),
+}
+
+pub enum ExtInst {
+    AddConst(u16),
+    SubConst(u16),
 }
 
 pub struct Function<'a> {
@@ -50,14 +56,14 @@ impl<'a> Program<'a> {
                     }
                     func = Some(Function {
                         name: fn_instruction.name,
-                        instructions: vec![Instruction::SimpleInstruction(
-                            ast::Instruction::Function(fn_instruction),
-                        )],
+                        instructions: vec![Instruction::Vm(ast::Instruction::Function(
+                            fn_instruction,
+                        ))],
                         source_file,
                     });
                 }
                 inst => {
-                    let ir_inst = Instruction::SimpleInstruction(inst);
+                    let ir_inst = Instruction::Vm(inst);
                     if let Some(func) = func.as_mut() {
                         func.instructions.push(ir_inst);
                     } else {
@@ -79,6 +85,12 @@ impl<'a> Program<'a> {
         );
     }
 
+    pub fn optimize(&mut self) {
+        for func in self.functions.values_mut() {
+            func.instructions = optimize_const_binary_ops(std::mem::take(&mut func.instructions));
+        }
+    }
+
     pub fn mark_reachable_functions(&mut self) {
         let mut func_queue = VecDeque::new();
         func_queue.push_back("Sys.init");
@@ -87,7 +99,7 @@ impl<'a> Program<'a> {
         // Jack shouldn't have any.
         for module in self.modules.values() {
             for inst in &module.instructions {
-                if let Instruction::SimpleInstruction(ast::Instruction::Call(call)) = inst {
+                if let Instruction::Vm(ast::Instruction::Call(call)) = inst {
                     func_queue.push_back(call.function);
                 }
             }
@@ -105,7 +117,7 @@ impl<'a> Program<'a> {
             };
 
             for inst in &func.instructions {
-                if let Instruction::SimpleInstruction(ast::Instruction::Call(call)) = inst {
+                if let Instruction::Vm(ast::Instruction::Call(call)) = inst {
                     func_queue.push_back(call.function);
                 }
             }
@@ -132,7 +144,7 @@ impl<'a> Program<'a> {
 
             let mut seen = HashSet::new();
             for inst in &func.instructions {
-                if let Instruction::SimpleInstruction(ast::Instruction::Call(call)) = inst {
+                if let Instruction::Vm(ast::Instruction::Call(call)) = inst {
                     if !func_stack.contains(&call.function) && !seen.contains(&call.function) {
                         let func = self.functions.get(call.function).unwrap();
                         func_queue.push_front((func, depth + 1));

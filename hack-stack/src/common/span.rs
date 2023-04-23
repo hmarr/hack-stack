@@ -8,6 +8,13 @@ impl Span {
     pub fn new(start: usize, end: usize) -> Span {
         Span { start, end }
     }
+
+    pub fn merge(&self, other: &Self) -> Self {
+        Span {
+            start: self.start.min(other.start),
+            end: self.end.max(other.end),
+        }
+    }
 }
 
 #[derive(Debug)]

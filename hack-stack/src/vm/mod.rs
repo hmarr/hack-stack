@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod codegen;
 pub mod ir;
+mod optimize;
 pub mod parser;
 pub mod tokenizer;
 pub mod tokens;
@@ -32,6 +33,8 @@ pub fn translate(
     if dce {
         program.mark_reachable_functions();
     }
+
+    program.optimize();
 
     let mut gen = Codegen::new(bootstrap);
 
@@ -71,7 +74,7 @@ fn vm_code_to_ir(file: &SourceFile) -> Result<Vec<ir::Instruction>, Vec<SpanErro
     parser.parse().map(|instructions| {
         instructions
             .into_iter()
-            .map(ir::Instruction::SimpleInstruction)
+            .map(ir::Instruction::Vm)
             .collect::<Vec<_>>()
     })
 }
