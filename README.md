@@ -91,3 +91,5 @@ At this point you can visit http://localhost:8080/ in your browser to see the we
 ### Loading custom ROMs
 
 If you've compiled your own `.hack` ROMs, copy them to the "hack-web/www/roms", re-start the web server, and you should be able to load them from the web emulator.
+
+You can also use the `compile-rom.sh` script to compile a your own Jack program and add it to the `roms` directory. First, make sure you've built the Hack toolchain. Then, add your directory of Jack source files to the `programs` directory, and run `compile-rom.sh programs/<program-dir>`. The `programs` directory includes a couple of examples you can compile right away.
