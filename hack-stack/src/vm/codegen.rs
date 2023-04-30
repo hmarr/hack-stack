@@ -166,8 +166,22 @@ impl<'a> Codegen<'a> {
             ast::Segment::Constant => {
                 // CONSTANT is a virtual memory segment that just loads constant
                 // values onto the stack
-                self.setd_const(inst.offset);
-                self.pushd();
+                match inst.offset {
+                    0 => {
+                        self.inc_sp();
+                        self.emit("A=M-1");
+                        self.emit("M=0");
+                    }
+                    1 => {
+                        self.inc_sp();
+                        self.emit("A=M-1");
+                        self.emit("M=1");
+                    }
+                    _ => {
+                        self.setd_const(inst.offset);
+                        self.pushd();
+                    }
+                }
             }
             ast::Segment::Local => {
                 self.setd_segment_value("LCL", inst.offset);
@@ -465,9 +479,21 @@ impl<'a> Codegen<'a> {
     }
 
     fn setd_segment_value(&mut self, seg: &str, offset: u16) {
-        self.setd_const(offset);
-        self.set_a(seg);
-        self.emit("A=D+M");
+        match offset {
+            0 => {
+                self.set_a(seg);
+                self.emit("A=M");
+            }
+            1 => {
+                self.set_a(seg);
+                self.emit("A=M+1");
+            }
+            _ => {
+                self.setd_const(offset);
+                self.set_a(seg);
+                self.emit("A=D+M");
+            }
+        }
         self.emit("D=M");
     }
 
@@ -489,8 +515,7 @@ impl<'a> Codegen<'a> {
     }
 
     fn pushd(&mut self) {
-        self.set_a("SP");
-        self.emit("M=M+1");
+        self.inc_sp();
         self.emit("A=M-1");
         self.emit("M=D");
     }
