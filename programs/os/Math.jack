@@ -1,0 +1,129 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/Math.jack
+
+/**
+ * A library of commonly used mathematical functions.
+ * Note: Jack compilers implement multiplication and division using OS method calls.
+ */
+class Math {
+    static Array powersOfTwo;
+    static int divide2qy;
+
+    /** Initializes the library. */
+    function void init() {
+        var int i, value;
+        let powersOfTwo = Array.new(16);
+        let i = 0;
+        let value = 1;
+        while (i < 16) {
+            let powersOfTwo[i] = value;
+            let value = value + value;
+            let i = i + 1;
+        }
+        return;
+    }
+
+    /** Returns the absolute value of x. */
+    function int abs(int x) {
+        if (x < 0) {
+            return -x;
+        }
+        return x;
+    }
+
+    /** Returns the product of x and y. 
+     *  When a Jack compiler detects the multiplication operator '*' in the 
+     *  program's code, it handles it by invoking this method. In other words,
+     *  the Jack expressions x*y and multiply(x,y) return the same value.
+     */
+    function int multiply(int x, int y) {
+        var int shiftedX, result, mask, i;
+        let shiftedX = x;
+        let result = 0;
+        let i = 0;
+        let mask = 1;
+
+        while (i < 16) {
+            if (~(y & mask = 0)) {
+                let result = result + shiftedX;
+            }
+            let shiftedX = shiftedX + shiftedX;
+            let mask = mask + mask;
+            let i = i + 1;
+        }
+        return result;
+    }
+
+    /** Returns the integer part of x/y.
+     *  When a Jack compiler detects the multiplication operator '/' in the 
+     *  program's code, it handles it by invoking this method. In other words,
+     *  the Jack expressions x/y and divide(x,y) return the same value.
+     */
+    function int divide(int x, int y) {
+        var int result;
+
+        let divide2qy = 0;
+        let result = Math._divideInner(Math.abs(x), Math.abs(y));
+
+        if (~((x < 0) = (y < 0))) {
+            return -result;
+        }
+        return result;
+    }
+
+    function int _divideInner(int x, int y) {
+        var int quotient, q2;
+
+        if ((y > x) | (y < 0)) {
+            return 0;
+        }
+
+        let quotient = Math.divide(x, y + y);
+
+        let q2 = quotient + quotient;
+        if (q2 < 0) {
+            return 0;
+        }
+
+        if ((x - divide2qy) < y) {
+            return q2;
+        }
+
+        let divide2qy = divide2qy + y;
+        return q2 + 1;
+    }
+
+    /** Returns the integer part of the square root of x. */
+    function int sqrt(int x) {
+        var int y, j, candidate, candidateSq;
+        let y = 0;
+        let j = 7; // n / 2 - 1, where n = 16 (bits)
+        while (j > -1) {
+            let candidate = y + powersOfTwo[j];
+            let candidateSq = candidate * candidate;
+            if (((candidateSq - 1) < x) & candidateSq > 0) {
+                let y = candidate;
+            }
+            let j = j - 1;
+        }
+        return y;
+    }
+
+    /** Returns the greater number. */
+    function int max(int a, int b) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+
+    /** Returns the smaller number. */
+    function int min(int a, int b) {
+        if (a < b) {
+            return a;
+        }
+        return b;
+    }
+}

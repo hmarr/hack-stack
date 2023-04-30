@@ -1,0 +1,170 @@
+class SnekGame {
+  // The board is an x by y board of cells of a given size, and handles all the
+  // board-releated drawing operations.
+  field Board board;
+
+  // The snek is the snek, which handles snek state, next head position
+  // calculations, and collision detection.
+  field Snek snek;
+
+  // `foodPos` is the cell index for the food's location, `rndSeed` is a value
+  // derived from user-input used to make food generation random, `score` is
+  // the game's score.
+  field int foodPos, rndSeed, score;
+
+  // The game runs while this is true.
+  field boolean running;
+
+  // The dimensions of the board.
+  static int w, h;
+
+  constructor SnekGame new() {
+    // 20x20 cells, offset by 156, 28 to center the board on the screen
+    let w = 20;
+    let h = 20;
+    let board = Board.new(156, 28, w, h);
+    let snek = Snek.new(w, h);
+
+    // This controls where the food is generated, so initialise to some
+    // non-zero value
+    let rndSeed = 73;
+
+    let score = 0;
+
+    return this;
+  }
+
+  // Main game loop
+  method void run() {
+    var int delay;
+
+    // Draw the initial scoreboard
+    do Output.moveCursor(11, 6);
+    do Output.printString("Score");
+    do updateScore();
+
+    // Set up the game
+    do board.drawBorder();
+    do snek.draw(board);
+    do generateFood();
+
+    // Go, go, go!
+    let running = true;
+    while (running) {
+      let delay = update();
+      do processInput(delay);
+    }
+
+    // Good effort, though
+    do Output.moveCursor(11, 49);
+    do Output.printString("Game over!");
+
+    return;
+  }
+
+  // Place food in a random location on the board
+  method void generateFood() {
+    // rndSeed is a random-ish value fed from the frame delay we detected user
+    // input. We need to map it to the range [0, w*h). Since we have no
+    // built-in modulus function, we take the least significant 9 bits then
+    // subtract w*h if we're still out of the desired range. This works because
+    // w*h is 400.
+    let foodPos = rndSeed & 511;
+    if (foodPos > ((w * h) - 1)) {
+      let foodPos = foodPos - ((w * h) - 1);
+    }
+
+    // Avoid spawning food within the snake's body
+    while (snek.checkCollision(foodPos)) {
+      let foodPos = foodPos - 1;
+      if (foodPos < 0) {
+        let foodPos = ((w * h) - 1);
+      }
+    }
+
+    // Draw the food
+    do board.drawFood(foodPos);
+
+    return;
+  }
+
+  // Move the snake one cell in its current direction. Calculate collisions
+  // with food and the snake's body. Returns the number of cycles to wait.
+  method int update() {
+    var int head, tail, i;
+    let head = snek.nextHead();
+
+    // If we've hit the snake's body, it's game over
+    if (snek.checkCollision(head)) {
+      let running = false;
+      return;
+    }
+
+    if (head = foodPos) {
+      // If we found food, grow the snake
+      do snek.grow(board, head);
+
+      let score = score + 1;
+      do updateScore();
+
+      do generateFood();
+      // We do more work when we find food, so delay for less time
+      // to keep the game speed consistent
+      return 500;
+    }
+
+    // If we didn't find food, move the snake in-place
+    do snek.move(board, head);
+    return 1000;
+  }
+
+  // Handle user input. Also spins for a fixed number of cycles so the game
+  // doesn't run too fast. Looking for input in this spin loop gives us the
+  // best chance of catching a keypress.
+  method void processInput(int timeout) {
+    var char key, lastKey;
+    var int newDir;
+    let newDir = 0;
+
+    let lastKey = Keyboard.keyPressed();
+    while (~(timeout = 0)) {
+      let key = Keyboard.keyPressed();
+      if (key = 131) { let newDir = 1; } // Up arrow
+      if (key = 132) { let newDir = 2; } // Right arrow
+      if (key = 133) { let newDir = 3; } // Down arrow
+      if (key = 130) { let newDir = 4; } // Left arrow
+      let timeout = timeout - 1;
+
+      // As we don't have a good rng, the cycle during which user input occurs
+      // is a decent enough source of entropy
+      if (~(key = lastKey)) {
+        let rndSeed = rndSeed + timeout;
+      }
+      let lastKey = key;
+    }
+
+    // Give the snake it's new direction. We do this here rather than in the
+    // loop so you can't change direction more than once per frame (which
+    // would make situations like the snake doubling back on itself possible).
+    if (~(newDir = 0)) {
+      do snek.setDir(newDir);
+    }
+
+    return;
+  }
+
+  // Redraw the scoreboard
+  method void updateScore() {
+    do Output.moveCursor(12, 6);
+    do Output.printInt(score);
+    return;
+  }
+
+  // Destructor
+  method void dispose() {
+    do snek.dispose();
+    do board.dispose();
+    do Memory.deAlloc(this);
+    return;
+  }
+}

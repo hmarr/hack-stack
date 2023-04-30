@@ -1,0 +1,176 @@
+class Snek {
+  // Represent the snake as an array of positions, where each position is an
+  // index into the board. The downside of this approach is that we need to
+  // move every position along 1 word to the left every frame, so moving the
+  // snake is O(n) where n is the snake's length. A linked list would make
+  // snake movement a constant-time operation. However, a linked list would
+  // use a lot more memory, and also result in O(n) list traversals (which are
+  // used for collision detection). Additionally, that O(n) traversal would
+  // also include lots of expensive `call` and `return` instructions. Given
+  // these tradeoffs, an Array seems like the better option. The O(n) snake
+  // move operation could be eliminated using a circular buffer (maintaining a
+  // pointer to the head), but performance seems fine so I chose to avoid that
+  // extra implementation complexity.
+  field Array segments;
+  field int length;
+
+  // `dir` is the snake's direction
+  field int dir;
+
+  // The dimensions of the board.
+  field int boardW, boardH;
+
+  constructor Snek new(int w, int h) {
+    // 20x20 cells, offset by 156, 28 to center the board on the screen
+    let boardW = w;
+    let boardH = h;
+
+    // Generate the initial snake with a length of 3
+    let segments = Array.new(w * h);
+    let segments[0] = 0;
+    let segments[1] = 1;
+    let segments[2] = 2;
+    let length = 3;
+
+    // dir = 2 means right. 1 is up, 3 is down, and 4 is left.
+    let dir = 2;
+
+    return this;
+  }
+
+  // Set the snake's direction.
+  method void setDir(int newDir) {
+    // These conditionals prevent the snek from doubling back on itself
+    if ((newDir = 1) & ~(dir = 3)) { let dir = 1; } // Up arrow
+    if ((newDir = 2) & ~(dir = 4)) { let dir = 2; } // Right arrow
+    if ((newDir = 3) & ~(dir = 1)) { let dir = 3; } // Down arrow
+    if ((newDir = 4) & ~(dir = 2)) { let dir = 4; } // Left arrow
+    return;
+  }
+
+  // Draw the full snake. This is only needed at the start of the game, as
+  // other updates are handled incrementally by moveSnake()
+  method void draw(Board board) {
+    var int i;
+
+    let i = 0;
+    while (i < length) {
+      do board.fillCell(segments[i]);
+      let i = i + 1;
+    }
+
+    return;
+  }
+
+  // Grow the snake by one cell into the new head position provided
+  method void grow(Board board, int head) {
+    let segments[length] = head;
+    let length = length + 1;
+
+    // Draw the new head
+    do Screen.setColor(true);
+    do board.fillCell(head);
+
+    return;
+  }
+
+  // Move the snake in-place to the new head position provided
+  method void move(Board board, int head) {
+    var int tail, i;
+
+    // Start by clearing the tail on the screen
+    let tail = segments[0];
+    do Screen.setColor(false);
+    do board.fillCell(tail);
+
+    // Then shift the body locations to the left by one, freeing up space for
+    // a new head position at the end of the array
+    let i = 0;
+    while (i < (length - 1)) {
+      let segments[i] = segments[i+1];
+      let i = i + 1;
+    }
+
+    // Then set the new head position
+    let segments[length - 1] = head;
+
+    // Draw the new head
+    do Screen.setColor(true);
+    do board.fillCell(head);
+
+    return;
+  }
+
+  // Calculate the next head position from the current head position and the
+  // snake's direction
+  method int nextHead() {
+    var int head;
+    let head = segments[length - 1];
+
+    // Up
+    if (dir = 1) {
+      // Wrap if we've gone off the top of the screen, otherwise move one cell
+      // up by subtracting the number of cells in a row
+      if (head < boardW) {
+        let head = (boardW * (boardH - 1)) + head;
+      } else {
+        let head = head - boardW;
+      }
+    }
+
+    // Right
+    if (dir = 2) {
+      // Move one right and subtract a row if we moved across the right wall
+      let head = head + 1;
+      if (head = ((head / boardW) * boardW)) {
+        let head = head - boardW;
+      }
+    }
+
+    // Down
+    if (dir = 3) {
+      // If we've gone off the bottom, shift to the top, otherwise add a row
+      // to move one cell down
+      if (head > ((boardW * (boardH - 1)) - 1)) {
+        let head = head - (boardW * (boardH - 1));
+      } else {
+        let head = head + boardW;
+      }
+    }
+
+    // Left
+    if (dir = 4) {
+      // If we're at the left wall, shift to the right wall, then move one left
+      if (head = ((head / boardW) * boardW)) {
+        let head = head + boardW;
+      }
+      let head = head - 1;
+    }
+
+    return head;
+  }
+
+  // Check if a given position collides with the snake. Used for food
+  // generation (preventing collisions) and for snake self-collisions, which
+  // end the game.
+  method boolean checkCollision(int pos) {
+    var int i;
+
+    let i = 0;
+    while (i < length) {
+      if (segments[i] = pos) {
+        return true;
+      }
+      let i = i + 1;
+    }
+
+    return false;
+  }
+
+  // Destructor
+  method void dispose() {
+    do segments.dispose();
+    do Memory.deAlloc(this);
+    return;
+  }
+}

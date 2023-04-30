@@ -1,0 +1,68 @@
+class Board {
+  // xStart and yStart are the pixel offsets of the board on the screen. w and
+  // h are the dimensions (in cells, not pixels).
+  field int xStart, yStart, w, h;
+  // cellSize is the size of a single cell in pixels.
+  static int cellSize;
+
+  constructor Board new(int x, int y, int width, int height) {
+    let w = width;
+    let h = height;
+    let xStart = x;
+    let yStart = y;
+    let cellSize = 10;
+    return this;
+  }
+
+  // Fill the cell at the given position, where the position is an index into
+  // the board's cells. The index is width * y + x. It's assumed that
+  // Screen.setColor has already been called before this function is called.
+  method void fillCell(int pos) {
+    var int row, x, y;
+
+    // Jack division gives us the integer part of the division, so this gives
+    // us the row from pos
+    let row = pos / w;
+    // Calculate the top-left x and y pixel values for the cell
+    let y = yStart + (row * cellSize);
+    let x = xStart + ((pos - (row * w)) * cellSize);
+
+    do Screen.drawRectangle(x + 1, y + 1, x + (cellSize - 1), y + (cellSize - 1));
+
+    return;
+  }
+
+  method void drawFood(int pos) {
+    var int row, x, y;
+
+    // Jack division gives us the integer part of the division, so this gives
+    // us the row from pos
+    let row = pos / w;
+    // Calculate the top-left x and y pixel values for the cell
+    let y = yStart + (row * cellSize);
+    let x = xStart + ((pos - (row * w)) * cellSize);
+
+    do Screen.drawCircle(x + cellSize / 2, y + cellSize / 2, 4);
+
+    return;
+  }
+
+  // Draw lines around the border of the board.
+  method void drawBorder() {
+    var int xEnd, yEnd;
+    let xEnd = xStart + (w * cellSize);
+    let yEnd = yStart + (h * cellSize);
+
+    do Screen.drawLine(xStart, yStart, xEnd, yStart);
+    do Screen.drawLine(xEnd, yStart, xEnd, yEnd);
+    do Screen.drawLine(xEnd, yEnd, xStart, yEnd);
+    do Screen.drawLine(xStart, yEnd, xStart, yStart);
+
+    return;
+  }
+
+  method void dispose() {
+    do Memory.deAlloc(this);
+    return;
+  }
+}

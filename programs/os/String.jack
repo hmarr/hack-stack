@@ -1,0 +1,163 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/String.jack
+
+/**
+ * Represents character strings. In addition for constructing and disposing
+ * strings, the class features methods for getting and setting individual
+ * characters of the string, for erasing the string's last character,
+ * for appending a character to the string's end, and more typical
+ * string-oriented operations.
+ */
+class String {
+    field Array str;
+    field int length, capacity;
+
+    /** constructs a new empty string with a maximum length of maxLength
+     *  and initial length of 0. */
+    constructor String new(int maxLength) {
+        let str = Array.new(Math.max(maxLength, 1));
+        let length = 0;
+        let capacity = maxLength;
+        return this;
+    }
+
+    /** Disposes this string. */
+    method void dispose() {
+        do str.dispose();
+        return;
+    }
+
+    /** Returns the current length of this string. */
+    method int length() {
+        return length;
+    }
+
+    /** Returns the character at the j-th location of this string. */
+    method char charAt(int j) {
+        return str[j];
+    }
+
+    /** Sets the character at the j-th location of this string to c. */
+    method void setCharAt(int j, char c) {
+        if (j < capacity) {
+            let str[j] = c;
+        }
+        return;
+    }
+
+    /** Appends c to this string's end and returns this string. */
+    method String appendChar(char c) {
+        if (length < capacity) {
+            let str[length] = c;
+            let length = length + 1;
+        }
+        return this;
+    }
+
+    /** Erases the last character from this string. */
+    method void eraseLastChar() {
+        if (length > 0) {
+            let length = length - 1;
+        }
+        return;
+    }
+
+    /** Returns the integer value of this string, 
+     *  until a non-digit character is detected. */
+    method int intValue() {
+        var int n, i;
+        var char c;
+        var boolean neg, done;
+
+        if (length = 0) {
+            return 0;
+        }
+        
+        let i = 0;
+        let neg = false;
+
+        // Check for a leading minus sign
+        if (str[0] = 45) {
+            let i = i + 1;
+            let neg = true;
+        }
+
+        let n = 0;
+        let done = false;
+        while ((i < length) & ~done) {
+            let c = str[i];
+            if ((c < 48) | (c > 57)) {
+                let done = true;
+            } else {
+                let n = (n * 10) + (c - 48);
+                let i = i + 1;
+            }
+        }
+
+        if (neg) {
+            let n = -n;
+        }
+        return n;
+    }
+
+    /** Sets this string to hold a representation of the given value. */
+    method void setInt(int val) {
+        var int div;
+
+        let length = 0;
+        if (val < 0) {
+            let str[0] = 45;
+            let length = 1;
+        }
+
+        let val = Math.abs(val);
+
+        // Divisions are slow. Unrolling the loop makes it easy to reduce the
+        // number of divisions required.
+        if (val > 9999) {
+            let div = val / 10000;
+            let val = val - (div * 10000);
+            let str[length] = div + 48;
+            let length = length + 1;
+        }
+        if (val > 999) {
+            let div = val / 1000;
+            let val = val - (div * 1000);
+            let str[length] = div + 48;
+            let length = length + 1;
+        }
+        if (val > 99) {
+            let div = val / 100;
+            let val = val - (div * 100);
+            let str[length] = div + 48;
+            let length = length + 1;
+        }
+        if (val > 9) {
+            let div = val / 10;
+            let val = val - (div * 10);
+            let str[length] = div + 48;
+            let length = length + 1;
+        }
+        let str[length] = val + 48;
+        let length = length + 1;
+
+        return;
+    }
+
+    /** Returns the new line character. */
+    function char newLine() {
+        return 128;
+    }
+
+    /** Returns the backspace character. */
+    function char backSpace() {
+        return 129;
+    }
+
+    /** Returns the double quote (") character. */
+    function char doubleQuote() {
+        return 34;
+    }
+}

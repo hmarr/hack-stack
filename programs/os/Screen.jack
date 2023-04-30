@@ -1,0 +1,226 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/Screen.jack
+
+/**
+ * A library of functions for displaying graphics on the screen.
+ * The Hack physical screen consists of 256 rows (indexed 0..255, top to bottom)
+ * of 512 pixels each (indexed 0..511, left to right). The top left pixel on 
+ * the screen is indexed (0,0).
+ */
+class Screen {
+    static boolean black;
+    static Array screen, powersOfTwo;
+
+    /** Initializes the Screen. */
+    function void init() {
+        var int i, value;
+
+        let black = true;
+        let screen = 16384;
+
+        let powersOfTwo = Array.new(16);
+        let i = 0;
+        let value = 1;
+        while (i < 16) {
+            let powersOfTwo[i] = value;
+            let value = value + value;
+            let i = i + 1;
+        }
+
+        return;
+    }
+
+    /** Erases the entire screen. */
+    function void clearScreen() {
+        var int i;
+        let i = 0;
+        while (i < 8192) {
+            let screen[i] = false;
+            let i = i + 1;
+        }
+        return;
+    }
+
+    /** Sets the current color, to be used for all subsequent drawXXX commands.
+     *  Black is represented by true, white by false. */
+    function void setColor(boolean b) {
+        let black = b;
+        return;
+    }
+
+    /** Draws the (x,y) pixel, using the current color. */
+    function void drawPixel(int x, int y) {
+        var int addr;
+        let addr = (y * 32) + (x / 16);
+        if (black) {
+            let screen[addr] = screen[addr] | powersOfTwo[x & 15];
+        } else {
+            let screen[addr] = screen[addr] & (~powersOfTwo[x & 15]);
+        }
+        return;
+    }
+
+    function void drawWord(int addr, int value) {
+        if (black) {
+            let screen[addr] = screen[addr] | value;
+        } else {
+            let screen[addr] = screen[addr] & (~value);
+        }
+        return;
+    }
+
+    /** Draws a line from pixel (x1,y1) to pixel (x2,y2), using the current color. */
+    function void drawLine(int x1, int y1, int x2, int y2) {
+        var int x, xMax, y, yMax, a, b, da, dx, dy, diff;
+
+        // Horizontal lines are special cased for efficiency. They're mostly drawn
+        // one word at a time rather than one pixel at a time, so they're the best way
+        // to draw filled primitives quickly.
+        if (y1 = y2) {
+            do Screen.drawHorizontalLine(Math.min(x1, x2), Math.max(x1, x2), y1);
+            return;
+        }
+
+        // Vertical lines are also special cased for efficiency. They're faster than
+        // diagonal lines as they use a simpler algorithm, but not as fast as
+        // horizontal lines.
+        if (x1 = x2) {
+            let y = Math.min(y1, y2);
+            let yMax = Math.max(y1, y2);
+            while (y < yMax) {
+                do Screen.drawPixel(x1, y);
+                let y = y + 1;
+            }
+            return;
+        }
+
+        // Always draw top to bottom
+        if (y1 > y2) {
+            let x = x1;
+            let x1 = x2;
+            let x2 = x;
+            let y = y1;
+            let y1 = y2;
+            let y2 = y;
+        }
+
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+
+        let a = 0;
+        let da = 1;
+        let b = 0;
+
+        // If we're drawing right to left, flip the signs
+        if (dx < 0) {
+            let da = -1;
+            let dx = -dx;
+        }
+
+        let diff = 0;
+        while ((a < dx) & (b < dy)) {
+            do Screen.drawPixel(x1 + a, y1 + b);
+            if (diff < 0) {
+                let a = a + da;
+                let diff = diff + dy;
+            } else {
+                let b = b + 1;
+                let diff = diff - dx;
+            }
+        }
+
+        return;
+    }
+
+    function void drawHorizontalLine(int x1, int x2, int y) {
+        var int xStartWord, xStartWordOffset, xEndWord, xEndWordOffset;
+        var int startWord, endWord, startBits, endBits;
+        let x2 = x2 + 1;
+        let xStartWord = x1 / 16;
+        let xStartWordOffset = x1 & 15;
+        let xEndWord = x2 / 16;
+        let xEndWordOffset = x2 & 15;
+        let startWord = (y * 32) + xStartWord;
+        let endWord = startWord + (xEndWord - xStartWord);
+        let startBits = ~(powersOfTwo[xStartWordOffset] - 1);
+        let endBits = powersOfTwo[xEndWordOffset] - 1;
+
+        if (startWord = endWord) {
+            // Just draw the start and end bits, no whole words
+            do Screen.drawWord(startWord, startBits & endBits);
+        } else {
+            // Draw initial part of the line
+            do Screen.drawWord(startWord, startBits);
+            let startWord = startWord + 1;
+
+            // Draw body of the line word by word
+            while (startWord < endWord) {
+                do Screen.drawWord(startWord, -1);
+                let startWord = startWord + 1;
+            }
+
+            // Draw end of the line
+            do Screen.drawWord(startWord, endBits);
+        }
+        return;
+    }
+
+    /** Draws a filled rectangle whose top left corner is (x1, y1)
+     * and bottom right corner is (x2,y2), using the current color. */
+    function void drawRectangle(int x1, int y1, int x2, int y2) {
+        var int xStartWord, xStartWordOffset, xEndWord, xEndWordOffset;
+        var int startWord, endWord, startBits, endBits, wordLength;
+        let x2 = x2 + 1;
+        let xStartWord = x1 / 16;
+        let xStartWordOffset = x1 & 15;
+        let xEndWord = x2 / 16;
+        let xEndWordOffset = x2 & 15;
+        let startBits = ~(powersOfTwo[xStartWordOffset] - 1);
+        let endBits = powersOfTwo[xEndWordOffset] - 1;
+        let wordLength = xEndWord - xStartWord;
+
+        // Coordinates are inclusive, so we need to add one given we don't have <=
+        let y2 = y2 + 1;
+        while (y1 < y2) {
+            let startWord = (y1 * 32) + xStartWord;
+            let endWord = startWord + wordLength;
+
+            if (startWord = endWord) {
+                // Just draw the start and end bits, no whole words
+                do Screen.drawWord(startWord, startBits & endBits);
+            } else {
+                // Draw initial part of the line
+                do Screen.drawWord(startWord, startBits);
+                let startWord = startWord + 1;
+
+                // Draw body of the line word by word
+                while (startWord < endWord) {
+                    do Screen.drawWord(startWord, -1);
+                    let startWord = startWord + 1;
+                }
+
+                // Draw end of the line
+                do Screen.drawWord(startWord, endBits);
+            }
+
+            let y1 = y1 + 1;
+        }
+        return;
+    }
+
+    /** Draws a filled circle of radius r<=181 around (x,y), using the current color. */
+    function void drawCircle(int x, int y, int r) {
+        var int r2, dy, a;
+        let r2 = r * r;
+        let dy = 0;
+        while (dy < r) {
+            let a = Math.sqrt(r2 - (dy * dy));
+            do Screen.drawHorizontalLine(x - a, x + a, y - dy);
+            do Screen.drawHorizontalLine(x - a, x + a, y + dy);
+            let dy = dy + 1;
+        }
+        return;
+    }
+}
