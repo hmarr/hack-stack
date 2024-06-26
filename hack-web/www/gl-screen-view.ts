@@ -46,7 +46,7 @@ void main() {
 
   // The RGBA values are normalized to [0.0, 1.0], so map them back to the
   // original domain, then extract the relevant bit to get the pixel value.
-  float pixel = mod(floor((nibble * 255.0) / pow(2.0, mod(bit_index , 4.0))), 2.0);
+  float pixel = mod(floor((nibble * 255.0 + 0.5) / pow(2.0, mod(bit_index , 4.0))), 2.0);
 
   // Simulate RGB pixels
   vec4 tint = vec4(0.0, 0.55, 0.0, 1.0);
@@ -61,7 +61,6 @@ void main() {
     }
   }
   gl_FragColor = vec4(pixel * 0.4, pixel * 0.7, pixel * 0.2, 1.0) + tint * 0.4;
-
 }
 `;
 
