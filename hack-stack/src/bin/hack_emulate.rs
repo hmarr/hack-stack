@@ -15,7 +15,7 @@ fn emulate_main() -> Result<(), ()> {
         .skip(1)
         .partition(|&a| a.starts_with("--"));
 
-    let source_path = args.get(0).ok_or_else(|| {
+    let source_path = args.first().ok_or_else(|| {
         eprintln!("usage: hack-emulate FILE");
     })?;
 
