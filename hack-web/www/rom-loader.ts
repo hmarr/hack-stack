@@ -1,7 +1,4 @@
-// Dynamically load all ROMs from the roms folder
-const roms: { [k: string]: string } = {};
-const requireContext = require.context('./roms', true, /\.hack$/);
-requireContext.keys().forEach((key) => (roms[key.replace("./", "").replace(/\.hack$/, "")] = requireContext(key)));
+import { loadRom, romNames } from "./roms";
 
 export class RomLoader {
   el: HTMLElement;
@@ -11,7 +8,7 @@ export class RomLoader {
 
     const select = document.createElement('select');
 
-    for (const name of Object.keys(roms)) {
+    for (const name of romNames) {
       const option = document.createElement('option');
       option.value = name;
       option.innerText = name;
@@ -22,8 +19,7 @@ export class RomLoader {
     const loadBtn = document.createElement('button');
     loadBtn.innerText = 'Load ROM';
     loadBtn.addEventListener('click', async () => {
-      const rsp = await fetch(roms[select.value]);
-      onLoad(await rsp.text());
+      onLoad(await loadRom(select.value));
     });
     this.el.append(loadBtn);
   }

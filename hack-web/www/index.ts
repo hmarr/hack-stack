@@ -80,13 +80,7 @@ class App {
     this.speedSlider.style.marginRight = '1.5rem';
     controlsEl.append(this.speedSlider);
 
-    const romLoader = new RomLoader(rom => {
-      this.emulator.load_rom(rom);
-      this.cpuView.update();
-      this.screenView.update();
-      this.startBtn.disabled = false;
-      this.stepBtn.disabled = false;
-    });
+    const romLoader = new RomLoader(this.loadRom.bind(this));
     controlsEl.append(romLoader.el);
 
     diagsEl.append(controlsEl);
@@ -113,6 +107,14 @@ class App {
     this.startBtn.innerText = 'Start';
     document.removeEventListener('keydown', this.handleKeydown);
     document.removeEventListener('keyup', this.handleKeyup);
+  }
+
+  loadRom(rom: string) {
+    this.emulator.load_rom(rom);
+    this.cpuView.update();
+    this.screenView.update();
+    this.startBtn.disabled = false;
+    this.stepBtn.disabled = false;
   }
 
   update(steps: number) {
